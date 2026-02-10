@@ -1,7 +1,7 @@
 {
   "name": "team-pipeline",
   "description": "Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "Claudovka"
   },
