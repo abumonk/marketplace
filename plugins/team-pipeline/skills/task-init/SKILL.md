@@ -58,9 +58,16 @@ Create the `.agent/` directory structure in the current project.
    Decisions made during task implementation.
    ```
 
-7. Create `.agent/controller-state.md` with this content:
+7. Create `.agent/lead-state.md` with this content:
    ```markdown
    ---
+   last_analysis: null
+   pending_proposals: 0
+   decisions_awaiting: []
+   pattern_notes: []
+   session_context:
+     tasks_completed_today: 0
+     avg_stage_duration_mins: 0
    mode: semi-auto
    max_parallel: 3
    active_agents: []
@@ -69,9 +76,9 @@ Create the `.agent/` directory structure in the current project.
    paused: false
    ---
 
-   # Controller State
+   # Lead State
 
-   This file is managed by the pipeline controller. Do not edit manually unless performing recovery.
+   This file is managed by the lead agent. Do not edit manually unless performing recovery.
    ```
 
 8. Create `.agent/messenger.md` with this content:
@@ -82,45 +89,39 @@ Create the `.agent/` directory structure in the current project.
      discord:
        enabled: false
        webhook_url_env: DISCORD_WEBHOOK_URL
-       events: [all]
-       format: embed
+       events: [high, normal]
      telegram:
        enabled: false
        bot_token_env: TELEGRAM_BOT_TOKEN
        chat_id_env: TELEGRAM_CHAT_ID
        events: [all]
-       format: html
      slack:
        enabled: false
        webhook_url_env: SLACK_WEBHOOK_URL
-       events: [all]
-       format: blocks
+       events: [high]
      terminal:
        enabled: true
        events: [all]
-   notification_rules:
-     on_complete: true
-     on_block: true
-     on_fail: true
-     quiet_hours:
-       enabled: false
-       start: "22:00"
-       end: "08:00"
-   message_templates: {}
    ---
 
    # Messenger Configuration
 
-   This file controls pipeline notification delivery. Edit channel settings above to enable external notifications.
+   This file controls pipeline notification delivery. The lead agent reads this
+   to determine where and when to send notifications.
+
+   ## Severity Levels
+   - **high**: blocked, crashed, failed events
+   - **normal**: task advanced, role assigned
+   - **low**: task queued, dependency waiting
+   - **info**: batch completions, session summaries
 
    ## Setup
-
    1. Set `enabled: true` at the top level.
    2. Enable desired channels.
-   3. Set environment variables for each channel (see docs/designs/messenger-design.md).
-   4. Start a new session to validate channel configuration.
+   3. Set environment variables for each channel.
+   4. The lead agent handles formatting and delivery.
    ```
 
 9. Ask the user if they want to customize the build and test commands in config.md.
 
-10. Tell the user: "Pipeline initialized. Run `/init-roles` to configure project-specific roles, or use `/task` to create your first task."
+10. Tell the user: "Pipeline initialized. Run `/init-roles` to configure project-specific roles, or use `/task` to create your first task. The lead agent will manage pipeline orchestration."

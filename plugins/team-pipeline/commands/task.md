@@ -1,7 +1,7 @@
 ---
 description: Main entry point for the task pipeline - create, advance, and manage tasks
 disable-model-invocation: true
-argument-hint: [create|status|advance|complete|cancel|migrate|controller] [task-id|status|mode|pause|resume]
+argument-hint: [create|status|advance|complete|cancel|migrate|lead] [task-id]
 ---
 
 # Task Pipeline Command
@@ -45,15 +45,22 @@ Cancel a task:
 ### `/task migrate`
 Invoke the `team-pipeline:task-migrate` skill. Imports existing TODOs, issues, and work items from user-specified sources into the pipeline.
 
-### `/task controller [status|mode|pause|resume]`
+### `/task lead`
 
-Manage the pipeline controller orchestration layer.
+Invoke the lead agent for on-demand pipeline analysis.
 
-1. Parse the subcommand from `$ARGUMENTS`.
-2. Read `.agent/controller-state.md`. If it does not exist, tell the user to run `/task-init` first.
-3. Execute the requested action:
-   - `status` (or no subcommand): Display state summary including mode, paused state, active agents (count, task IDs, roles, start times), queue (count, task IDs, next stages, waiting_on), and last event.
-   - `mode <m>`: Validate mode is one of `manual`, `semi-auto`, `full-auto`. Update `mode` field. Update `last_event` to `{type: mode_change, timestamp: now}`. Write state file. Report the change and any implications (e.g., queued tasks will auto-spawn in full-auto).
-   - `pause`: Set `paused: true`. Update `last_event`. Write state file. Report: 'Controller paused. All events will produce notifications only.'
-   - `resume`: Set `paused: false`. Update `last_event`. Write state file. If mode is `full-auto`, process the queue (dequeue and spawn eligible tasks). Report: 'Controller resumed (mode: {mode}).'
-4. If no subcommand is provided, default to `status`.
+1. The lead agent reads all pipeline state:
+   - `.agent/lead-state.md` (orchestration state)
+   - `.agent/tasks/*.md` (all active tasks)
+   - `.agent/config.md` (stage assignments, settings)
+   - `.agent/messenger.md` (notification channels)
+2. Presents comprehensive pipeline report:
+   - Current task status across all stages
+   - Pending decisions awaiting user input
+   - Recommendations with reasoning
+   - Queue and dependency analysis
+   - Notification channel status
+3. Proposes next actions as a numbered list
+4. Awaits user decision
+
+The lead agent follows its role definition at `roles/templates/lead.md` under the "On-Demand: /task lead" section.
