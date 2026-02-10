@@ -65,7 +65,8 @@ planning --> implementing --> reviewing --> fixing --> completed --> researching
 
 | Skill | Description |
 |-------|-------------|
-| `task-init` | Initialize `.agent/` directory in your project |
+| `reinit` | Initialize or upgrade `.agent/` directory (schema-driven) |
+| `task-init` | Initialize `.agent/` directory (convenience wrapper for reinit) |
 | `task-create` | Create task with planner agent |
 | `task-status` | Display pipeline status table |
 | `task-migrate` | Import tasks from external sources |
@@ -179,6 +180,18 @@ Tasks can span multiple repositories. The pipeline auto-detects which repos are 
 
 During `/task-init`, the plugin detects existing branch naming conventions from repo history and suggests a matching template.
 
+## Upgrading
+
+When the plugin adds new features (directories, config fields, files), upgrade your project's `.agent/` directory:
+
+```
+/reinit
+```
+
+Reinit compares your current `.agent/` against the plugin's schema and shows what needs updating. It deep-merges missing config fields without overwriting your existing values. Always presents a dry-run report before making changes.
+
+For first-time setup, use `/task-init` (which calls reinit internally).
+
 ## Roadmap
 
 See `docs/concepts/` for planned features:
@@ -186,6 +199,7 @@ See `docs/concepts/` for planned features:
 - **Lead Agent** -- Automated pipeline orchestration (implemented)
 - **Messenger** -- Discord/Telegram/Slack notifications
 - **Git Operations** -- Branch, commit, push, PR lifecycle (implemented)
+- **Reinit** -- Schema-driven pipeline upgrades (implemented)
 - **Init-Roles** -- Interactive role setup
 - **Init-Skills** -- Automatic skill discovery
 - **Learn** -- Extract patterns from external projects
