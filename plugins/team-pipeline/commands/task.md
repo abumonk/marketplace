@@ -1,6 +1,5 @@
 ---
 description: Main entry point for the task pipeline - create, advance, and manage tasks
-disable-model-invocation: true
 argument-hint: [create|status|advance|complete|cancel|migrate|lead] [task-id]
 ---
 
