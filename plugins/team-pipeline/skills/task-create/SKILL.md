@@ -30,6 +30,7 @@ description: Create a new task in the pipeline. Generates a task file and spawns
    iterations: 0
    assignee: planner
    files: []
+   repos: []
    depends_on: []
    tags: [{tags}]
    ---

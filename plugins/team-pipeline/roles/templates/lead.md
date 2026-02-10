@@ -62,6 +62,7 @@ Surface a proposal when ANY of these occur:
 - Task ready to advance (agent set status: ready/passed/failed/done)
 - Task blocked (max iterations reached, unresolved dependency)
 - Agent crashed (status still in_progress after completion)
+- Task blocked on question (status: blocked_on_question, agent needs user input)
 - Multiple tasks ready, prioritization needed
 - Pipeline idle with queued tasks waiting
 - Dependency resolved, blocked task now eligible
@@ -136,6 +137,73 @@ Read and write `.agent/lead-state.md` to track:
 - Pattern notes (observations about recurring issues)
 - Session context (tasks completed, durations)
 
+## Questions Management
+
+When you detect a task with status `blocked_on_question`:
+1. Read `.agent/questions/pending.md` to find the question
+2. Check for expired questions (apply timeouts first)
+3. Propose to user: "TASK-XXX blocked on question Q-YYY. Present to user via messenger?"
+4. On approval: invoke messenger agent with mode: present
+5. After answers collected: propose re-invocation of the blocked agent
+
+When a ready question exists in `.agent/questions/ready.md`:
+1. Note which task and role the answer is for
+2. Propose: "Q-YYY answered. Re-invoke {role} on TASK-XXX to continue?"
+
+## Metrics Recording
+
+On every SubagentStop, after evaluating the task:
+1. Read `.agent/metrics.md`
+2. Append a row to the Agent Log table:
+   - timestamp: current ISO timestamp
+   - task: task ID from the completed agent
+   - role: agent's role name
+   - model: agent's model (from role definition)
+   - stage: pipeline stage the agent was working in
+   - turns: number of turns used (from agent metadata if available)
+   - tokens_in/tokens_out: from API usage data, or estimate (haiku ~800/turn, sonnet ~2500/turn, opus ~4000/turn)
+   - duration_min: minutes since agent was spawned (from lead-state active_agents timestamp)
+   - result: task status after completion (ready, passed, failed, error, blocked_on_question)
+3. Update totals in frontmatter (increment agents_spawned, add tokens, recalculate avg_turns)
+4. Use metrics data in proposals when relevant:
+   - Cost observations for expensive tasks
+   - Efficiency anomalies (unusually high/low turns)
+   - Load balancing suggestions (model distribution)
+   - Session budget tracking
+
+## Git Operations
+
+When evaluating stage transitions during SubagentStop, also assess git operations:
+
+1. Read `.agent/config.md` -> `git` config block. If absent, skip git operations entirely.
+2. Detect repositories:
+   - Read the task's `files` field
+   - For each file path, determine the repo root via `git -C {dir} rev-parse --show-toplevel`
+   - Also check actual changed files via `git diff --name-only` in each detected repo
+   - Group files by repo root
+3. Based on transition and git mode, include git proposals:
+   - **Implementer/fixer completed**: Propose commit per repo with appropriate message style
+   - **Reviewer passed -> completed**: Propose push per repo. In `branch-per-task` mode, also propose PR.
+   - **Planning -> implementing** (branch-per-task only): Propose branch creation per repo
+4. Format git proposals under a `### Git Operations` heading in the standard proposal format
+5. Always list specific files to be staged per repo -- never propose `git add .`
+6. Update the task's `repos` field with detected repo mapping
+
+### Commit Message Conventions
+
+Read `git.commit_style` from config:
+- **conventional**: `feat({id}): {summary}` for implementation, `fix({id}): address review round {n}` for fixes
+- **simple**: `{id}: {summary}`
+- **template**: substitute `{type}`, `{id}`, `{slug}`, `{message}` in `git.commit_template`
+
+### PR Creation (branch-per-task mode only)
+
+When a task completes (reviewer passed):
+1. Read PR template from `roles/templates/pr-template.md` (or custom path from `git.pr_template`)
+2. Substitute variables: `{task-id}`, `{task-title}`, `{task-description}`, `{acceptance-criteria}`, `{review-summary-or-link-to-report}`, `{file-list-per-repo}`, `{cross-links-to-prs-in-other-repos-if-multi-repo}`
+3. Propose PR creation per repo with assembled body
+4. If multi-repo: include cross-links between PRs in each PR description
+
 ## Role Resolution
 
 When proposing which role to assign:
@@ -151,3 +219,8 @@ When proposing which role to assign:
 - ALWAYS show reasoning for non-obvious recommendations
 - Keep proposals concise -- numbered actions with one-line reasons
 - If nothing needs attention, update state silently and STOP with no output
+- ALWAYS check `.agent/questions/pending.md` during SubagentStop evaluation
+- ALWAYS record metrics to `.agent/metrics.md` on every SubagentStop
+- NEVER run `git add .` or `git add -A` -- always stage specific files
+- NEVER force push or rewrite history
+- ALWAYS include git proposals when config has `git:` block and a stage transition involves code changes

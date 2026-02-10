@@ -76,16 +76,16 @@ Show three presets based on the detected project type:
 
 | Project Type | solo | team | full |
 |-------------|------|------|------|
-| `frontend` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, ux-designer | lead, planner, coder, code-reviewer, researcher, ux-designer, designer, qa-tester |
-| `backend-node` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
-| `backend-generic` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
-| `fullstack` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, ux-designer | lead, planner, coder, code-reviewer, researcher, ux-designer, qa-tester, designer, devops |
-| `python` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
-| `rust` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops |
-| `go` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops |
-| `java` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, qa-tester | lead, planner, coder, code-reviewer, researcher, qa-tester, devops |
-| `infra` | planner, implementer, reviewer | lead, planner, devops, code-reviewer, researcher, qa-tester | lead, planner, devops, code-reviewer, researcher, qa-tester, designer |
-| `unknown` | planner, implementer, reviewer | lead, planner, coder, code-reviewer, researcher, implementer | lead, planner, coder, code-reviewer, researcher, implementer, reviewer, qa-tester |
+| `frontend` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, ux-designer | lead, messenger, planner, coder, code-reviewer, researcher, ux-designer, designer, qa-tester |
+| `backend-node` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
+| `backend-generic` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
+| `fullstack` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, ux-designer | lead, messenger, planner, coder, code-reviewer, researcher, ux-designer, qa-tester, designer, devops |
+| `python` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops, designer |
+| `rust` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops |
+| `go` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops |
+| `java` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester | lead, messenger, planner, coder, code-reviewer, researcher, qa-tester, devops |
+| `infra` | planner, implementer, reviewer | lead, messenger, planner, devops, code-reviewer, researcher, qa-tester | lead, messenger, planner, devops, code-reviewer, researcher, qa-tester, designer |
+| `unknown` | planner, implementer, reviewer | lead, messenger, planner, coder, code-reviewer, researcher, implementer | lead, messenger, planner, coder, code-reviewer, researcher, implementer, reviewer, qa-tester |
 
 Display format:
 ```

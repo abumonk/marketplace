@@ -41,6 +41,19 @@ Run all checks and collect results into a migration plan:
   - If lead.md exists: skip.
 - If `.agent/roles/` does not exist or is empty: skip (roles not initialized yet).
 
+**Check D: questions directory**
+- Check if `.agent/questions/` exists.
+- If no: flag as `needs_creation` with label "questions directory missing".
+
+**Check E: metrics.md**
+- Check if `.agent/metrics.md` exists.
+- If no: flag as `needs_creation` with label "metrics.md missing".
+
+**Check F: git config in config.md**
+- Read `.agent/config.md` frontmatter.
+- Check if a `git:` block exists in the frontmatter.
+- If no `git:` block: flag as `needs_addition` with label "git config missing".
+
 ### 3. Present Migration Plan
 
 If no migrations needed:
@@ -197,6 +210,94 @@ Apply selected migrations in this order:
      Created: .agent/roles/lead.md
      Updated: config.md active_roles (added lead)
    ```
+
+#### Migration D: Create questions directory
+
+1. Create `.agent/questions/` directory.
+2. Create `.agent/questions/pending.md` with this content:
+   ```markdown
+   ---
+   last_updated: null
+   count: 0
+   next_id: 1
+   ---
+
+   # Pending Questions
+
+   Questions from agents awaiting user answers. Managed by messenger role.
+   ```
+3. Create `.agent/questions/ready.md` with this content:
+   ```markdown
+   ---
+   last_updated: null
+   count: 0
+   ---
+
+   # Ready Questions
+
+   Answered questions awaiting agent pickup. Agents read answers here and move to archive.
+   ```
+4. Create `.agent/questions/archive.md` with this content:
+   ```markdown
+   ---
+   last_updated: null
+   count: 0
+   ---
+
+   # Archived Questions
+
+   Processed questions. Append-only history.
+   ```
+5. Report: "Created questions directory with pending, ready, and archive files."
+
+#### Migration E: Create metrics.md
+
+1. Create `.agent/metrics.md` with this content:
+   ```markdown
+   ---
+   last_updated: null
+   totals:
+     tokens_in: 0
+     tokens_out: 0
+     agents_spawned: 0
+     tasks_completed: 0
+     avg_turns_per_agent: 0
+   ---
+
+   # Agent Metrics
+
+   Performance log maintained by the lead agent. Append-only.
+
+   ## Agent Log
+
+   | timestamp | task | role | model | stage | turns | tokens_in | tokens_out | duration_min | result |
+   |-----------|------|------|-------|-------|-------|-----------|------------|-------------|--------|
+   ```
+2. Report: "Created metrics.md with empty agent log."
+
+#### Migration F: Add git config to config.md
+
+1. Read `.agent/config.md` frontmatter.
+2. Detect branch naming conventions in the project:
+   - Run `git branch -a --list` in the project directory.
+   - Look for common patterns: `feature/`, `fix/`, `task/`, `hotfix/`, `release/`.
+   - If a dominant pattern is found (>50% of branches), use it for `branch_template` suggestion.
+3. Add the `git:` block to the frontmatter with defaults:
+   ```yaml
+   git:
+     mode: "current-branch"
+     branch_template: "task/{id}-{slug}"
+     base_branch: "main"
+     auto_detect_repos: true
+     commit_style: "conventional"
+     commit_template: "{type}({id}): {message}"
+     pr_template: "default"
+   ```
+4. If a branch pattern was detected, suggest it: "Detected branch pattern: `{pattern}/`. Use `{pattern}/{id}-{slug}` as template?"
+   - If user accepts: update `branch_template` accordingly.
+5. Ask the user: "Git mode for this project? current-branch (default) or branch-per-task?"
+   - Update `git.mode` based on response.
+6. Report: "Added git config to config.md (mode: {mode}, branch_template: {template})."
 
 ### 5. Completion Report
 

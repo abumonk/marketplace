@@ -1,5 +1,23 @@
-# Messenger (Deprecated)
+# Messenger Role
 
-The messenger has been replaced by the [Lead Role](lead.md).
+Question lifecycle manager. Presents agent questions to users, collects answers, manages timeouts and defaults. Channel-agnostic with terminal as primary channel.
 
-The lead agent handles contextual notifications as part of its orchestration duties. See the [lead design document](../designs/lead-role-design.md) for details.
+## Operations
+
+- **present**: Show pending questions, collect answers, move to ready
+- **timeout**: Apply defaults to expired questions
+- **status**: Report question store state
+
+## Model
+
+haiku - pure I/O, no reasoning needed.
+
+## Triggered By
+
+The lead agent invokes the messenger when it detects pending questions or blocked tasks. Users can also check directly via the lead.
+
+## See Also
+
+- [Question Store](questions.md)
+- [Lead Role](lead.md)
+- [Communication Layer Design](../designs/communication-layer-design.md)

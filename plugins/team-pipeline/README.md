@@ -127,15 +127,65 @@ Edit `.agent/config.md` to match your project:
 build_command: npm run build
 test_command: npm test
 max_iterations: 3
+git:
+  mode: "current-branch"
+  branch_template: "task/{id}-{slug}"
+  base_branch: "main"
+  auto_detect_repos: true
+  commit_style: "conventional"
+  commit_template: "{type}({id}): {message}"
+  pr_template: "default"
 ---
 ```
+
+## Git Operations
+
+The pipeline integrates git lifecycle management. All git actions are proposed by the lead agent and require user approval.
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `current-branch` (default) | Commits on the current branch at stage transitions. No branch creation, no PRs. |
+| `branch-per-task` | Creates an isolated branch per task at implementation start. Push + PR on completion. |
+
+### What Happens at Each Stage
+
+| Transition | current-branch | branch-per-task |
+|------------|---------------|-----------------|
+| planning -> implementing | Detect repos | Detect repos + create branch per repo |
+| implementer completes | Commit per repo | Commit per repo |
+| fixer completes | Commit per repo | Commit per repo |
+| reviewer passes -> completed | Push per repo | Push per repo + create PR per repo |
+
+### Multi-Repo Support
+
+Tasks can span multiple repositories. The pipeline auto-detects which repos are involved by walking file paths to their nearest `.git` directory. Git operations (branch, commit, push, PR) are executed independently per repo, coordinated under the same task ID.
+
+### Commit Styles
+
+| Style | Implementation | Fix |
+|-------|---------------|-----|
+| `conventional` | `feat(TASK-001): summary` | `fix(TASK-001): address review round 2` |
+| `simple` | `TASK-001: summary` | `TASK-001: fix review round 2` |
+| `template` | Uses `commit_template` with `{type}`, `{id}`, `{slug}`, `{message}` variables |
+
+### Branch Template Variables
+
+| Variable | Example |
+|----------|---------|
+| `{id}` | `TASK-001` |
+| `{slug}` | `add-user-auth` |
+
+During `/task-init`, the plugin detects existing branch naming conventions from repo history and suggests a matching template.
 
 ## Roadmap
 
 See `docs/concepts/` for planned features:
 - **Roles** -- Customizable agent templates per project
-- **Controller** -- Automated pipeline orchestration
+- **Lead Agent** -- Automated pipeline orchestration (implemented)
 - **Messenger** -- Discord/Telegram/Slack notifications
+- **Git Operations** -- Branch, commit, push, PR lifecycle (implemented)
 - **Init-Roles** -- Interactive role setup
 - **Init-Skills** -- Automatic skill discovery
 - **Learn** -- Extract patterns from external projects
