@@ -1,0 +1,315 @@
+# {{PROJECT_NAME}}
+
+{{PROJECT_DESCRIPTION}}
+
+## Team Pipeline
+
+This project uses the **team-pipeline** plugin for structured task processing. All feature work, bug fixes, and refactoring flow through the pipeline.
+
+### Quick Reference
+
+| Command | Action |
+|---------|--------|
+| `/task create` | Create a new task (spawns planner) |
+| `/task status` | View all tasks and their stages |
+| `/task advance TASK-XXX` | Move task to next stage |
+| `/task complete TASK-XXX` | Force-complete a task |
+| `/task cancel TASK-XXX` | Cancel a task |
+| `/task migrate` | Import TODOs, issues, or markdown tasks |
+| `/learn <path>` | Analyze an external project for adoptable patterns |
+
+### Pipeline Stages
+
+```
+planning -> implementing -> reviewing -> fixing -> completed -> researching
+```
+
+| Stage | Agent | Model | What Happens |
+|-------|-------|-------|-------------|
+| planning | planner | opus | Scope, design, identify target files |
+| implementing | implementer | sonnet | Write code, run tests |
+| reviewing | reviewer | opus | Validate against acceptance criteria |
+| fixing | implementer | sonnet | Address review feedback (max 3 rounds) |
+| completed | -- | -- | Task done, ready for knowledge extraction |
+| researching | researcher | sonnet | Extract patterns into knowledge base |
+
+
+### Working With Tasks
+
+1. **Creating work**: Always use `/task create`. Describe what you need done. The planner agent will scope it, identify files, and write acceptance criteria.
+2. **Advancing stages**: Use `/task advance TASK-XXX` to move to the next stage. The lead agent orchestrates transitions automatically when agents complete.
+3. **Checking progress**: Use `/task status` for a pipeline overview. Read individual task files in `.agent/tasks/` for details.
+4. **Blocked tasks**: After 3 failed review iterations, a task is marked BLOCKED. Reassess the approach or split the task.
+
+### Subagent Limitations
+Subagents (Task tool) cannot access MCP tools or external drives (e.g., O:\ drive). When delegating tasks, the lead agent should handle any work requiring MCP connections, external drive access, or tools that have auto-denial policies. If a subagent fails twice, execute the task directly rather than retrying delegation.
+
+### Task Agent Retry Policy
+If a background/subagent task fails or times out, split it into smaller subtasks with more focused prompts before retrying. After 2 failures, execute the work directly as lead. Never retry the same broad prompt more than twice.
+
+
+---
+
+
+## Project Configuration
+
+### Build & Test
+
+```
+Build:  {{BUILD_COMMAND}}
+Test:   {{TEST_COMMAND}}
+Lint:   {{LINT_COMMAND}}
+```
+
+### Git Integration
+
+```yaml
+mode: current-branch          # or branch-per-task
+commit_style: conventional    # feat(TASK-001): summary
+base_branch: main
+branch_template: task/{id}-{slug}
+```
+
+**Stage transitions trigger git operations automatically:**
+- `planning -> implementing`: detect repos, create branch (if branch-per-task)
+- `implementer/fixer completes`: commit changes per repo
+- `reviewer passes -> completed`: push, create PR (if branch-per-task)
+
+All git actions are proposed by the lead agent and require user approval.
+
+---
+
+## Working Folders
+
+Agents are constrained to declared directories. File operations outside these boundaries are blocked and logged. The `.agent/` directory is always accessible.
+
+### Folder Configuration
+
+```yaml
+# .agent/config.md
+working_folders:
+  {{PACKAGE_1}}:
+    source: {{SOURCE_PATH}}
+    tests: {{TESTS_PATH}}
+  {{PACKAGE_2}}:
+    source: {{SOURCE_PATH_2}}
+    tests: {{TESTS_PATH_2}}
+```
+
+Folder names describe purpose (`source`, `tests`, `docs`, `config`, `assets`, `build-scripts`). Values are paths relative to project root with trailing slash for directories.
+
+### Task Scoping
+
+Tasks are scoped to specific packages via the `packages` field in task frontmatter:
+
+```yaml
+---
+id: TASK-003
+packages: [{{PACKAGE_1}}, {{PACKAGE_2}}]
+---
+```
+
+- **Omitted or empty**: agents can access all declared working folders
+- **Specified**: agents can only access folders within listed packages
+- The planner sets `packages` automatically; the user can override
+
+### Stage Access
+
+| Stage | Scope |
+|-------|-------|
+| planning | Full project (needs to determine which packages are involved) |
+| implementing | Task packages only |
+| reviewing | Task packages only (plus `git diff` boundary check) |
+| fixing | Task packages only |
+| researching | Full project (cross-package pattern extraction) |
+
+### Enforcement
+
+- `Read`, `Write`, `Edit`, `Glob`, `Grep` are checked via PreToolUse hook
+- `Bash` is not checked directly; reviewer catches violations via `git diff`
+- Blocked operations are logged: `BOUNDARY: agent blocked from path -- not in working folders`
+
+---
+
+## Project Structure
+
+```
+{{PROJECT_ROOT}}/
+  src/                        # Source code
+  tests/                      # Test files
+  docs/                       # Documentation
+  .agent/                     # Pipeline state (created by /task-init)
+    tasks/                    # Active task files
+    tasks/archive/            # Completed tasks
+    designs/                  # Design documents from planner
+    reports/                  # Review reports, learn reports
+    knowledge/                # Project knowledge base
+      patterns.md             # Recurring patterns
+      issues.md               # Common issues and solutions
+      decisions.md            # Architecture decisions
+    roles/                    # Active role instances
+    questions/                # Agent-to-user question queue
+    config.md                 # Pipeline settings
+    lead-state.md             # Orchestration state
+    messenger.md              # Notification channel config
+    metrics.md                # Agent performance log
+```
+
+---
+
+## Roles
+
+The pipeline uses role templates to define agent behavior. Default roles are active out of the box. Additional roles can be instantiated from built-in templates.
+
+### Active Roles
+
+| Role | Stages | Description |
+|------|--------|-------------|
+| planner | planning | Scope, design, file targeting |
+| implementer | implementing, fixing | Write code, run tests, fix issues |
+| reviewer | reviewing | Validate, test, produce reports |
+| researcher | researching | Extract patterns, update knowledge |
+
+### Available Templates
+
+Additional roles can be activated with `/init-roles`:
+
+| Template | Purpose |
+|----------|---------|
+| lead | Pipeline orchestration (active by default via hooks) |
+| coder | Alternative implementer for feature coding |
+| code-reviewer | Code-focused review (style, patterns, best practices) |
+| designer | System and architecture design |
+| ux-designer | UX/UI design |
+| qa-tester | QA testing and test coverage |
+| devops | Infrastructure, CI/CD, deployment |
+
+### Customizing Roles
+
+Role instances live in `.agent/roles/`. Override any template field:
+
+```yaml
+# .agent/roles/implementer.md
+---
+model: opus              # override default model
+skills:
+  - testing
+  - react-patterns       # project-specific skill
+knowledge:
+  - patterns
+  - conventions
+pipeline_stages: [implementing, fixing]
+---
+```
+
+---
+
+## Skills & Capabilities
+
+### Installed Skills
+
+<!-- Update this list after running /init-skills -->
+
+| Skill | Source | Purpose |
+|-------|--------|---------|
+| -- | -- | Run `/init-skills` to detect and install |
+
+### Skill Detection
+
+Run `/init-skills` to scan the project and recommend skills based on detected technologies. It checks:
+- Dependency manifests (package.json, requirements.txt, etc.)
+- Config files (tsconfig, eslint, CI workflows)
+- Directory structure and patterns
+- Skills referenced by active roles
+
+### Knowledge Base
+
+The `.agent/knowledge/` directory accumulates project intelligence:
+- **patterns.md** -- Recurring patterns discovered across tasks
+- **issues.md** -- Common issues and their solutions
+- **decisions.md** -- Architecture decisions and their rationale
+
+The researcher agent updates these after each completed task. Reference them when creating tasks to avoid repeating mistakes.
+
+### Plugin & Skill Commands
+Valid task pipeline commands are: /task-status, /task-init, /task-lead, /init-skills, /init-roles, /task-migrate. The command `/task` alone is NOT valid. Always use the full hyphenated command name. If a skill is not recognized, check `.claude/skills/` directory and `settings.json` for registration before suggesting alternatives.
+
+---
+
+## Messenger & Notifications
+
+Notification delivery is configured in `.agent/messenger.md`. Disabled by default.
+
+### Channels
+
+| Channel | Status | Config |
+|---------|--------|--------|
+| Terminal | Enabled | Always active |
+| Discord | Disabled | Set `DISCORD_WEBHOOK_URL` env var |
+| Slack | Disabled | Set `SLACK_WEBHOOK_URL` env var |
+| Telegram | Disabled | Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` env vars |
+
+### Severity Levels
+
+| Level | Events |
+|-------|--------|
+| high | blocked, crashed, failed |
+| normal | task advanced, role assigned |
+| low | task queued, dependency waiting |
+| info | batch completions, session summaries |
+
+---
+
+## Learning From Other Projects
+
+Use `/learn <project_path>` to analyze an external project and extract adoptable patterns:
+
+```
+/learn ../reference-project
+/learn ../reference-project --quick    # structure + config only
+/learn ../reference-project --report   # report only, no adoption prompts
+```
+
+Reports are saved to `.agent/reports/learn-{name}-report.md`. Selected patterns can be converted into pipeline tasks via `/task create`.
+
+---
+
+## Workspace Settings
+
+### Preferences
+
+- **Language**: English
+- **Code Style**: {{CODE_STYLE}}
+- **Response Style**: Concise, technical
+- **Auto-commit**: Disabled (pipeline proposes, user approves)
+
+### Conventions
+
+- **Branching**: {{BRANCH_CONVENTION}}
+- **Commit Messages**: Conventional commits via pipeline (`feat`, `fix`, `refactor`)
+- **PR Process**: Pipeline creates PRs with acceptance criteria checklist
+- **Testing**: All code changes validated by reviewer agent before completion
+
+---
+
+## Upgrading
+
+When the team-pipeline plugin adds new features, upgrade the `.agent/` directory:
+
+```
+/reinit
+```
+
+This compares your current `.agent/` against the plugin schema, shows a dry-run report, and deep-merges missing fields without overwriting your values.
+
+---
+
+## Getting Started
+
+1. Install the team-pipeline plugin in Claude Code
+2. Open this project and run `/task-init`
+3. Configure `.agent/config.md` with your build/test commands
+4. Optionally run `/init-roles` to activate additional roles
+5. Optionally run `/init-skills` to detect and install project-relevant skills
+6. Start working: `/task create`
+

@@ -20,7 +20,7 @@ Then install any plugin:
 
 | Plugin | Description | Version |
 |--------|-------------|---------|
-| [team-pipeline](plugins/team-pipeline/) | Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents | 0.4.0 |
+| [team-pipeline](plugins/team-pipeline/) | Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents | 0.4.1 |
 
 ## Adding a Plugin
 
