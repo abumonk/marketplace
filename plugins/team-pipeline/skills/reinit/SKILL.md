@@ -30,18 +30,7 @@ Check if `.agent/` exists in the current project directory.
 
 ### 3. Create Directories
 
-Create `.agent/` and all directories listed in the schema:
-```
-.agent/
-.agent/tasks/
-.agent/tasks/archive/
-.agent/logs/
-.agent/reports/
-.agent/designs/
-.agent/knowledge/
-.agent/roles/
-.agent/questions/
-```
+Create `.agent/` and then `.agent/{dir}/` for every entry in the schema's `directories` list. Do not hardcode directory names -- always read from the schema.
 
 ### 4. Create Files from Schema
 
@@ -97,6 +86,7 @@ Pipeline initialized (v{version}).
 Next steps:
 - Run /init-roles to configure project-specific roles
 - Run /task to create your first task
+- Run /start-adventure to start a feature adventure
 ```
 
 STOP.

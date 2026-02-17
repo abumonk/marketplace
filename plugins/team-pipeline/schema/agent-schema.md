@@ -10,6 +10,7 @@ directories:
   - knowledge
   - roles
   - questions
+  - adventures
 
 files:
   config.md:
@@ -27,6 +28,13 @@ files:
         commit_style: { default: "conventional" }
         commit_template: { default: "{type}({id}): {message}" }
         pr_template: { default: "default" }
+      adventure:
+        max_task_tokens: { default: 100000 }
+        max_task_duration: { default: "30min" }
+        token_cost_per_1k:
+          opus: { default: 0.015 }
+          sonnet: { default: 0.003 }
+          haiku: { default: 0.001 }
     interactive:
       - field: git.mode
         question: "Git mode for this project?"
@@ -44,6 +52,7 @@ files:
 
       Edit the frontmatter above to match your project's build and test commands.
       See the `git:` block for git integration settings.
+      See the `adventure:` block for feature adventure thresholds and cost settings.
 
   lead-state.md:
     type: frontmatter

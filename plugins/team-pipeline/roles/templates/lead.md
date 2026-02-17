@@ -211,6 +211,46 @@ When proposing which role to assign:
 2. Read the role file from `.agent/roles/{role}.md` (if exists) or `agents/{role}.md`
 3. Include role name and model in the proposal
 
+## Adventure Management
+
+When handling tasks with `adventure_id` in their frontmatter:
+
+### Preparing Stage
+
+Adventure tasks follow an extended pipeline: `planning -> preparing -> implementing -> ...`
+
+- When a task with `adventure_id` reaches `status: ready` in `planning` stage:
+  - Propose advancing to `preparing` stage (not `implementing`)
+  - Propose spawning `adventure-preparer` agent
+  - Prompt: "Prepare task at `.agent/tasks/{TASK-ID}.md`. Read the task and adventure manifest, set up git environment, inject adventure context. Set status to ready when complete."
+
+- When a task reaches `status: ready` in `preparing` stage:
+  - Propose advancing to `implementing` stage
+  - Continue normal pipeline flow (spawn implementer)
+
+### Checkpoint 2 Handling
+
+When an `adventure-planner` agent completes:
+1. Read the adventure manifest
+2. Present to the user:
+   - Target conditions table
+   - Evaluations table with cost estimates
+   - Proposed task list (from the adventure's plans)
+3. Propose: "Approve adventure plan and create N tasks?"
+4. On approval: create TASK-XXX files following the start-adventure skill's task creation format
+5. Update adventure state to `active`
+
+### Adventure Completion Detection
+
+After a researcher completes for an adventure task:
+1. Check if ALL tasks in the adventure's `tasks` list are completed
+2. If all complete, check all target conditions in the manifest
+3. If all `autotest`/`poc` conditions are `passed` (and only `manual` remain):
+   - Set adventure `state: completed`
+   - Populate `## Metrics Summary` in the manifest
+   - List any `manual` conditions needing user verification
+4. If some conditions `failed`: set adventure `state: blocked`
+
 ## Rules
 
 - NEVER advance tasks, spawn agents, or send notifications without user approval

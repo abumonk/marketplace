@@ -15,6 +15,8 @@ Invoke the `team-pipeline:task-create` skill.
 ### `/task status`
 Invoke the `team-pipeline:task-status` skill.
 
+If `.agent/adventures/` exists and contains adventures, also invoke `team-pipeline:adventure-status` to show adventure-level grouping.
+
 ### `/task advance TASK-XXX`
 Advance the specified task to its next stage:
 
@@ -91,3 +93,9 @@ Invoke the lead agent for on-demand pipeline analysis.
 4. Awaits user decision
 
 The lead agent follows its role definition at `roles/templates/lead.md` under the "On-Demand: /task lead" section.
+
+### `/task adventure start {prompt}`
+Invoke the `team-pipeline:start-adventure` skill with the prompt as arguments.
+
+### `/task adventure status`
+Invoke the `team-pipeline:adventure-status` skill.

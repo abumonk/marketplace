@@ -48,6 +48,21 @@ description: Create a new task in the pipeline. Generates a task file and spawns
    - [{timestamp}] created: Task created
    ```
 
+   If the task is being created as part of an adventure (called from `/start-adventure`), also include these optional frontmatter fields:
+
+   ```yaml
+   adventure_id: {ADV-ID}
+   adventure_plan: {plan-NNN}
+   target_conditions: [{TC-IDs}]
+   evaluation:
+     access_requirements: [{tools}]
+     skill_set: [{skills}]
+     estimated_duration: {duration}
+     estimated_tokens: {tokens}
+   ```
+
+   These fields are set by the `/start-adventure` skill when creating tasks from an adventure plan. They are not prompted for when creating standalone tasks.
+
 5. Spawn the `planner` agent in the background with this prompt:
    "Plan task at `.agent/tasks/{TASK-ID}.md`. Read the task, explore the codebase, write a design document, and update the task file. Set status to ready when complete."
 

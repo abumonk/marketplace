@@ -25,7 +25,18 @@ You receive a completed task file path. Analyze all artifacts from the task life
    - Were there patterns in the issues found?
    - Did the design accurately predict the implementation scope?
    - Were any files modified that weren't in the original plan?
-6. Update knowledge base files:
+6. If the task has an `adventure_id` field:
+   a. Read the adventure manifest at `.agent/adventures/{adventure_id}/manifest.md`
+   b. Find this task's row in the `## Evaluations` table
+   c. Record actual metrics from this task's execution:
+      - Actual duration: from task log timestamps (first entry to last entry)
+      - Actual tokens: from `.agent/metrics.md` agent log entries for this task
+      - Actual cost: compute from actual tokens using rates in `.agent/config.md` adventure settings
+   d. Compute variance: `(actual - estimated) / estimated * 100`
+   e. Update the evaluations table row with actual values and variance
+   f. If variance exceeds +/- 50%, add a knowledge base entry:
+      `- **Estimation variance ({task-id})**: Estimated {est}, actual {act} ({variance}%). {reason if identifiable} (from {task-id})`
+7. Update knowledge base files:
 
 ### `.agent/knowledge/patterns.md`
 Append any new patterns discovered. Deduplicate with existing entries.

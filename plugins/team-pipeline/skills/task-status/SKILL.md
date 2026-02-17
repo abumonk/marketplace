@@ -38,3 +38,15 @@ description: Display the current status of all tasks in the pipeline, grouped by
    - `ready` in `implementing` stage: "Ready to advance to reviewing"
    - `passed` in `reviewing` stage: "Ready to complete"
    - `failed` in `reviewing` stage: "Ready to advance to fixing (iteration {n+1})"
+
+7. If `.agent/adventures/` exists, check for adventure tasks:
+   - For each displayed task, if it has an `adventure_id` field, show it in parentheses after the title
+   - Example: `| TASK-005 | Register endpoint (ADV-001) | implementing | in_progress | 0 |`
+   - After the main table, add a brief adventure summary:
+     ```
+     ### Adventures
+     | ID | Title | State | Progress |
+     |----|-------|-------|----------|
+     | ADV-001 | User Management API | active | 5/8 tasks |
+     ```
+   - Suggest `/adventure-status` for detailed adventure view
