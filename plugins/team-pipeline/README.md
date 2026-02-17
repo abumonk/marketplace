@@ -48,7 +48,7 @@ planning --> implementing --> reviewing --> fixing --> completed --> researching
 | implementing | implementer | sonnet | Write code, run tests |
 | reviewing | reviewer | opus | Test, validate, report |
 | fixing | implementer | sonnet | Address review feedback |
-| researching | researcher | haiku | Extract patterns to knowledge base |
+| researching | researcher | opus | Extract patterns to knowledge base |
 
 ## Commands
 

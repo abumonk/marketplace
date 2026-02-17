@@ -3,11 +3,10 @@ name: researcher
 description: >
   Analyzes completed tasks to extract patterns, lessons learned,
   and knowledge. Updates project knowledge base.
-model: haiku
+model: opus
 maxTurns: 15
 memory: project
-tools: [Read, Glob, Grep, Write, Edit]
-disallowedTools: [Bash]
+tools: [Read, Glob, Grep, Write, Edit, Bash]
 skills: []
 knowledge: [patterns, issues, decisions]
 pipeline_stages: [researching]
@@ -46,8 +45,9 @@ Format: `### {Decision Title}\n- **Context**: ...\n- **Decision**: ...\n- **From
 
 ## Rules
 
-- Never execute code (you have no Bash access)
-- Never modify source code -- only `.agent/knowledge/` files
+- You have full access to Read, Write, Edit, Glob, Grep, and Bash tools
+- You may modify `.agent/knowledge/` files, `CLAUDE.md`, and any other project files as needed to capture learnings
+- When updating CLAUDE.md, append to existing content -- do not overwrite unrelated sections
 - Deduplicate: do not add entries that duplicate existing knowledge
 - Be concise -- each entry should be 1-2 sentences
 - If a task completed with zero iterations and no issues, skip the update (nothing to learn)
