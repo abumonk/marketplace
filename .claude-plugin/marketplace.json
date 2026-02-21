@@ -20,6 +20,18 @@
       "license": "MIT",
       "keywords": ["team", "pipeline", "tasks", "agents", "review", "planning", "adventure"],
       "category": "development"
+    },
+    {
+      "name": "team-mcp",
+      "source": "./plugins/team-mcp",
+      "description": "MCP server exposing pipeline state, task management, adventure tracking, and messaging channels to Claude via the Model Context Protocol.",
+      "version": "0.9.0",
+      "author": {
+        "name": "Claudovka"
+      },
+      "license": "MIT",
+      "keywords": ["mcp", "pipeline", "tasks", "agents", "real-time", "channels"],
+      "category": "development"
     }
   ]
 }

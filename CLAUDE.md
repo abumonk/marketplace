@@ -11,14 +11,17 @@ marketplace/
   .claude-plugin/
     marketplace.json       # Marketplace manifest — lists all plugins
   plugins/
-    team-pipeline/         # First plugin: multi-agent task pipeline
+    team-pipeline/         # Multi-agent task pipeline plugin
       .claude-plugin/
-        plugin.json        # Plugin manifest
-      commands/            # Slash commands
-      agents/              # Subagent definitions
-      skills/              # Skill definitions
-      hooks/               # Hook configurations
-      roles/               # Role templates
+        plugin.json
+      agents/
+      skills/
+      hooks/
+      roles/
+    team-mcp/              # MCP server for pipeline state access
+      .claude-plugin/
+        plugin.json
+      server/
   CLAUDE.md
   README.md
 ```

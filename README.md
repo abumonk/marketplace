@@ -21,6 +21,7 @@ Then install any plugin:
 | Plugin | Description | Version |
 |--------|-------------|---------|
 | [team-pipeline](plugins/team-pipeline/) | Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents | 0.4.1 |
+| [team-mcp](plugins/team-mcp/) | MCP server for pipeline state access, task management, and messaging channels | 0.9.0 |
 
 ## Adding a Plugin
 
