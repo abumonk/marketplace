@@ -1,0 +1,12 @@
+{
+  "name": "team-mcp",
+  "description": "MCP server for team-pipeline -- validated state access, structured queries, and concurrency control for .agent/ pipeline files",
+  "version": "0.1.0",
+  "author": {
+    "name": "Claudovka"
+  },
+  "homepage": "https://github.com/abumonk/team-mcp",
+  "repository": "https://github.com/abumonk/team-mcp",
+  "license": "MIT",
+  "keywords": ["mcp", "team-pipeline", "pipeline", "server", "state-management"]
+}
