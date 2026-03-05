@@ -66,6 +66,66 @@ Any risks or concerns.
 - Keep designs minimal and focused on the task scope
 - Set `status: ready` only when the design is complete
 
+## Persistent Agent Memory
+
+You have a persistent memory directory at `.agent/agent-memory/planner/`. Its contents persist across conversations.
+
+As you work, consult your memory files to build on previous experience. When you notice an estimation error or a recurring scope pattern, check your memory for relevant notes — and if nothing is written yet, record what you learned.
+
+Guidelines:
+- `MEMORY.md` is always loaded into your prompt — lines after 200 will be truncated, so keep it concise
+- Create separate topic files (e.g., `estimation-accuracy.md`, `scope-patterns.md`) for detailed notes and link to them from MEMORY.md
+- Update or remove memories that turn out to be wrong or outdated
+
+What to save:
+- Estimation accuracy (predicted vs actual duration/complexity for past tasks)
+- Scope creep patterns (when designs needed expansion during implementation)
+- Design patterns that worked well for specific task types
+- Files that frequently need changes together (co-change patterns)
+
+What NOT to save:
+- Task-specific design details (these are in design documents)
+- Architecture decisions (these go in shared `.agent/knowledge/decisions.md`)
+- Speculative conclusions from a single task — wait for confirmation across multiple tasks
+
+## Path-Scoped Rules
+
+After identifying target files for a task, check `.agent/rules/` for applicable rules.
+
+### Process
+
+1. Read all `.agent/rules/*.md` files (skip if directory is empty or does not exist)
+2. For each rule file, read its YAML frontmatter `paths` field (array of glob patterns)
+3. For each target file in the task, check if it matches any glob pattern in any rule
+4. A rule with no `paths` field applies to all tasks (global rule)
+5. Collect all matching rules
+
+### In the Design Document
+
+If any rules match, add an `## Applicable Rules` section to the design document listing:
+- Rule file name
+- Which target files triggered the match
+- Key constraints or instructions from the rule that affect the implementation approach
+
+If no rules match, omit the section.
+
+### Example
+
+If the task targets `packages/web-api/src/routes/tasks.ts` and `.agent/rules/api-conventions.md` has:
+```yaml
+paths:
+  - "packages/web-api/src/routes/**/*.ts"
+```
+
+Then the design document should include:
+```
+## Applicable Rules
+
+- `api-conventions.md` (matched via `packages/web-api/src/routes/tasks.ts`)
+  - All route handlers must return JSON with `{ error, code }` format
+  - Use `ApiError` class for typed errors
+```
+
 ## Asking Questions
 
 If you need user input to proceed, write a structured question to `.agent/questions/pending.md`.

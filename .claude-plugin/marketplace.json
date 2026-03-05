@@ -12,25 +12,25 @@
     {
       "name": "team-pipeline",
       "source": "./plugins/team-pipeline",
-      "description": "Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents. Supports feature adventures for iterative feature development.",
-      "version": "0.7.0",
+      "description": "Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents. Supports feature adventures, lifecycle hooks, agent persistent memory, skills v2, composite skills, and path-scoped rules.",
+      "version": "0.10.0",
       "author": {
         "name": "Claudovka"
       },
       "license": "MIT",
-      "keywords": ["team", "pipeline", "tasks", "agents", "review", "planning", "adventure"],
+      "keywords": ["team", "pipeline", "tasks", "agents", "review", "planning", "adventure", "hooks", "memory", "rules"],
       "category": "development"
     },
     {
       "name": "team-mcp",
       "source": "./plugins/team-mcp",
-      "description": "MCP server exposing pipeline state, task management, adventure tracking, and messaging channels to Claude via the Model Context Protocol.",
-      "version": "0.9.0",
+      "description": "MCP server for team-pipeline -- validated state access, structured queries, and concurrency control for .agent/ pipeline files. Includes hook management, agent memory, diagnostics, and skill discovery tools.",
+      "version": "0.2.0",
       "author": {
         "name": "Claudovka"
       },
       "license": "MIT",
-      "keywords": ["mcp", "pipeline", "tasks", "agents", "real-time", "channels"],
+      "keywords": ["mcp", "pipeline", "tasks", "agents", "real-time", "channels", "hooks", "memory", "diagnostics"],
       "category": "development"
     }
   ]

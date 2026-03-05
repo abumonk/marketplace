@@ -13,6 +13,10 @@ import { registerAgentTools } from './lib/tools/agent.js';
 import { registerAdventureTools } from './lib/tools/adventure.js';
 import { ChannelManager } from './lib/channels/manager.js';
 import { registerChannelTools } from './lib/tools/channels.js';
+import { registerHookTools } from './lib/tools/hooks.js';
+import { registerAgentMemoryTools } from './lib/tools/agent-memory.js';
+import { registerDiagnosticsTools } from './lib/tools/diagnostics.js';
+import { registerSkillTools } from './lib/tools/skills.js';
 
 // Verify .agent/ directory is accessible before starting the server.
 // Exit cleanly (not as an error) if not found -- the server has nothing to serve.
@@ -53,6 +57,10 @@ registerFileTools(server);
 registerAgentTools(server);
 registerAdventureTools(server);
 registerChannelTools(server, channelManager);
+registerHookTools(server);
+registerAgentMemoryTools(server);
+registerDiagnosticsTools(server);
+registerSkillTools(server);
 
 // pipeline://events resource -- returns last 50 events from the ring buffer.
 server.resource(

@@ -1,7 +1,7 @@
 {
   "name": "team-mcp",
-  "description": "MCP server for team-pipeline -- validated state access, structured queries, and concurrency control for .agent/ pipeline files",
-  "version": "0.1.0",
+  "description": "MCP server for team-pipeline -- validated state access, structured queries, and concurrency control for .agent/ pipeline files. Includes hook management, agent memory, diagnostics, and skill discovery tools.",
+  "version": "0.2.0",
   "author": {
     "name": "Claudovka"
   },

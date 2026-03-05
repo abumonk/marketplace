@@ -1,5 +1,5 @@
 ---
-pipeline_version: "0.1.0"
+pipeline_version: "0.10.0"
 
 directories:
   - tasks
@@ -11,6 +11,14 @@ directories:
   - roles
   - questions
   - adventures
+  - agent-memory
+  - agent-memory/lead
+  - agent-memory/planner
+  - agent-memory/coder
+  - agent-memory/code-reviewer
+  - agent-memory/reviewer
+  - agent-memory/researcher
+  - rules
 
 files:
   config.md:
@@ -185,6 +193,139 @@ files:
 
       | timestamp | task | role | model | stage | turns | tokens_in | tokens_out | duration_min | result |
       |-----------|------|------|-------|-------|-------|-----------|------------|-------------|--------|
+
+  hooks.md:
+    type: frontmatter
+    required_fields:
+      version: { default: "1.0" }
+      hooks:
+        default:
+          - id: enforce-working-folders
+            event: PreToolUse
+            matcher:
+              tools: [Write, Edit, Read, Glob, Grep]
+            action: block
+            mode: enforce
+            description: "Block file operations outside declared working folders"
+            enabled: true
+          - id: log-bash-usage
+            event: PreToolUse
+            matcher:
+              tools: [Bash]
+            action: log
+            mode: advisory
+            description: "Log Bash usage for post-hoc review"
+            enabled: true
+          - id: record-agent-completion
+            event: SubagentStop
+            matcher:
+              roles: ["*"]
+            action: log
+            mode: always
+            description: "Record agent completion metrics"
+            enabled: true
+          - id: adventure-completion-check
+            event: TaskCompleted
+            matcher:
+              tags: [adventure]
+            action: notify
+            mode: advisory
+            description: "Check if adventure is complete when an adventure task finishes"
+            enabled: true
+    body_template: |
+      # Hook Configuration
+
+      This file defines lifecycle hooks for the pipeline. The lead agent evaluates
+      these rules during orchestration events.
+
+      ## How Hooks Work
+
+      1. An event occurs (agent completes, stage transition proposed, tool use detected)
+      2. The lead agent reads this file and finds matching hooks
+      3. For each matching hook, the lead applies the specified action
+
+      ## Modes
+
+      - **enforce**: Violations block the action.
+      - **advisory**: Generates a recommendation.
+      - **always**: Always fires (logging, metrics).
+
+      ## Events
+
+      | Event | When | Evaluation |
+      |-------|------|------------|
+      | PreToolUse | Before tool use | Injected as agent instructions |
+      | PostToolUse | After tool use | Injected as agent instructions |
+      | SubagentStop | Agent completes | Real-time by lead |
+      | StageTransition | Stage advancement | Real-time by lead |
+      | TaskCompleted | Task finalized | Real-time by lead |
+      | InstructionsLoaded | Agent prompt assembly | Real-time by lead |
+
+  agent-memory/lead/MEMORY.md:
+    type: template
+    template: |
+      # Lead Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
+
+  agent-memory/planner/MEMORY.md:
+    type: template
+    template: |
+      # Planner Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
+
+  agent-memory/coder/MEMORY.md:
+    type: template
+    template: |
+      # Coder Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
+
+  agent-memory/code-reviewer/MEMORY.md:
+    type: template
+    template: |
+      # Code-Reviewer Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
+
+  agent-memory/reviewer/MEMORY.md:
+    type: template
+    template: |
+      # Reviewer Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
+
+  agent-memory/researcher/MEMORY.md:
+    type: template
+    template: |
+      # Researcher Agent Memory
+
+      ## Key Learnings
+
+      ## Topic Files
+
+      ## Notes
 ---
 
 # Agent Schema

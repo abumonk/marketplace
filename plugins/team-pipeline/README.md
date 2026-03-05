@@ -192,6 +192,91 @@ Reinit compares your current `.agent/` against the plugin's schema and shows wha
 
 For first-time setup, use `/task-init` (which calls reinit internally).
 
+## New Features (v0.10.0)
+
+These features are available after upgrading your pipeline with `/reinit`.
+
+### Lifecycle Hooks
+
+**Effort: Medium** | Defined in `.agent/hooks.md`
+
+Declarative event-driven rules that the lead agent evaluates during pipeline orchestration. Hooks fire on events like tool use, agent completion, stage transitions, and task completion.
+
+| Event | When | Default Hooks |
+|-------|------|---------------|
+| `PreToolUse` | Before file operations | Working folder enforcement (enforce) |
+| `PostToolUse` | After file modifications | -- |
+| `SubagentStop` | Agent completes work | Metrics recording (always) |
+| `StageTransition` | Task advances to next stage | -- |
+| `TaskCompleted` | Task reaches completed | Adventure completion check (advisory) |
+| `InstructionsLoaded` | Agent prompt assembled | -- |
+
+Hooks use three modes: `enforce` (mandatory, blocks on failure), `advisory` (recommendation only), and `always` (logging/metrics). Configure in `.agent/hooks.md` frontmatter.
+
+See `docs/concepts/hooks.md` for details.
+
+### Agent Persistent Memory
+
+**Effort: Low** | Stored in `.agent/agent-memory/<role>/`
+
+Each agent role gets a persistent memory directory with a `MEMORY.md` index file and optional topic files. The lead agent injects the first 200 lines of a role's `MEMORY.md` into the spawn prompt. Agents curate their own memory at task end.
+
+Memory is project-scoped (version-controllable), role-specific (no cross-role contamination), and self-curated (agents manage their own entries). This complements the shared knowledge base which captures project-wide patterns.
+
+See `docs/concepts/agent-memory.md` for details.
+
+### Skills v2 (Enhanced Skill Format)
+
+**Effort: Medium** | Enhanced SKILL.md frontmatter
+
+Extended skill frontmatter with four new optional fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `context` | `inline \| fork` | `inline` | Run skill inline or in a separate subagent |
+| `agent` | string | current role | Role template for forked context |
+| `model` | `opus \| sonnet \| haiku` | role default | Override model for this skill |
+| `allowed-tools` | string[] | all role tools | Restrict available tools |
+
+All new fields are optional with backward-compatible defaults. Existing skills work unchanged.
+
+See `docs/concepts/skills-v2.md` for details.
+
+### Composite Skills
+
+**Effort: High** | Three new multi-agent workflow skills
+
+| Skill | Description | Context |
+|-------|-------------|---------|
+| `/simplify` | Multi-perspective code review (3 parallel agents: reuse, quality, efficiency) | fork, reviewer, sonnet |
+| `/batch` | Bulk file operations with pattern matching and sequential execution | fork, coder, sonnet |
+| `/debug-pipeline` | Pipeline diagnostics with health report and recommendations | inline, read-only |
+
+Composite skills use `context: fork` and `disable-model-invocation: true`. They are triggered manually and run multi-step workflows.
+
+### Path-Scoped Rules
+
+**Effort: Low** | Stored in `.agent/rules/`
+
+Markdown files with glob patterns that inject instructions when agents work on matching files. Rules are user-maintained and complement the shared knowledge base (global patterns) and hooks (event-driven behavior).
+
+```yaml
+# .agent/rules/api-conventions.md
+---
+paths:
+  - "packages/web-api/src/routes/**/*.ts"
+---
+
+# API Conventions
+
+- All endpoints return JSON with consistent error format
+- Use ApiError class for typed errors
+```
+
+Rules are checked by the planner (included in designs) and the lead (injected into agent prompts). Rules without `paths` apply to all tasks.
+
+See `docs/concepts/rules.md` for details.
+
 ## Roadmap
 
 See `docs/concepts/` for planned features:

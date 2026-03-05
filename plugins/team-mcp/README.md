@@ -45,6 +45,40 @@ The server reads and writes the same `.agent/` markdown files that team-pipeline
 | `pipeline.file_write` | Write file (working folder enforced) |
 | `pipeline.file_search` | Search files (working folder enforced) |
 
+### Hook Management
+
+| Tool | Description |
+|------|-------------|
+| `pipeline.hooks_get` | Read hook configuration, optionally filtered by event |
+| `pipeline.hooks_set` | Update or merge hook rules |
+| `pipeline.hooks_evaluate` | Test which hooks would fire for a synthetic event |
+
+### Agent Memory
+
+| Tool | Description |
+|------|-------------|
+| `pipeline.memory_list` | List memory files for a role |
+| `pipeline.memory_get` | Read agent memory file (MEMORY.md or topic file) |
+| `pipeline.memory_set` | Write agent memory file |
+| `pipeline.memory_search` | Search across all or specific role memories |
+
+### Diagnostics
+
+| Tool | Description |
+|------|-------------|
+| `pipeline.health` | Pipeline health check: stale agents, stuck tasks, config issues, metrics anomalies |
+| `pipeline.debug_task` | Full artifact dump for a specific task |
+| `pipeline.estimation_report` | Compare estimated vs actual duration and token usage |
+
+### Skill Discovery
+
+| Tool | Description |
+|------|-------------|
+| `pipeline.skills_list` | List installed skills with metadata |
+| `pipeline.skills_get` | Read a skill definition |
+| `pipeline.rules_list` | List path-scoped rule files |
+| `pipeline.rules_match` | Find rules that apply to given file paths |
+
 ## License
 
 MIT

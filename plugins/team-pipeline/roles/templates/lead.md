@@ -137,6 +137,35 @@ Read and write `.agent/lead-state.md` to track:
 - Pattern notes (observations about recurring issues)
 - Session context (tasks completed, durations)
 
+When MCP is available, `pipeline.task_update` and `pipeline.config_set` provide atomic writes with validation, eliminating race conditions from read-modify-write cycles.
+
+## MCP Integration
+
+This section applies to the lead agent running in a hook context (SubagentStop, SessionStart, Stop). Subagents (planner, implementer, reviewer, researcher) cannot access MCP tools and always use direct file I/O -- do not instruct them otherwise.
+
+### Detection
+
+At the start of any hook invocation, attempt to call `pipeline.status` (a cheap, read-only probe). If it succeeds, MCP tools are available for this session. If it fails or the tool is not recognized, fall back to direct file I/O for all operations in this invocation. Do not retry MCP after a failure mid-session -- if any MCP call fails, switch to file I/O for the remainder of that hook invocation.
+
+### Tool Preference Mapping
+
+| Operation | MCP Tool | File I/O Fallback |
+|-----------|----------|-------------------|
+| Read task | `pipeline.task_get {task-id}` | `Read .agent/tasks/TASK-XXX.md` + parse frontmatter |
+| Advance stage | `pipeline.task_advance` | Read task, modify stage/status in frontmatter, Write task |
+| Log metrics | `pipeline.metrics_log` | Read `.agent/metrics.md`, append row, Write back |
+| List tasks | `pipeline.task_list` | `Glob .agent/tasks/TASK-*.md` + Read each |
+| Update task | `pipeline.task_update` | Read task, modify fields, Write task |
+| Pipeline status | `pipeline.status` | Read lead-state.md + task files manually |
+| Log to task | `pipeline.task_log` | Read task, append to Log section, Write back |
+| Read config | `pipeline.config_get` | `Read .agent/config.md` |
+| Query metrics | `pipeline.metrics` | `Read .agent/metrics.md` |
+| Knowledge ops | `pipeline.knowledge_get` / `pipeline.knowledge_add` / `pipeline.knowledge_search` | Read/Write `.agent/knowledge/*.md` |
+
+### Fallback Rule
+
+If any MCP call fails mid-session (e.g., server crashed), switch to file I/O for the remainder of that hook invocation. Do not retry the failed MCP call. Prefer correctness over efficiency.
+
 ## Questions Management
 
 When you detect a task with status `blocked_on_question`:
@@ -204,12 +233,124 @@ When a task completes (reviewer passed):
 3. Propose PR creation per repo with assembled body
 4. If multi-repo: include cross-links between PRs in each PR description
 
+## Hook Evaluation
+
+Before every evaluation, read `.agent/hooks.md` to load active hook rules (if the file exists).
+
+### Before Agent Spawn (InstructionsLoaded + PreToolUse + PostToolUse)
+
+When assembling an agent's prompt:
+1. Read `.agent/hooks.md`
+2. Find all enabled hooks with event `InstructionsLoaded`, `PreToolUse`, or `PostToolUse`
+3. Filter by matcher (role, stage, tools)
+4. For each matching hook, generate instruction text:
+   - `block` (PreToolUse): "You MUST NOT use {tools} on paths outside: {resolved_folders}"
+   - `log` (PreToolUse): "Log all {tools} usage in the task log"
+   - `notify` (PostToolUse): "After every {tools} operation, run: {command}"
+   - `inject` (InstructionsLoaded): include the hook's `content` field verbatim
+5. Append all generated instructions to the agent's prompt
+6. Note applied hooks in lead-state under `last_event`
+
+### During SubagentStop
+
+After reading the task and before proposing next steps:
+1. Find all enabled hooks with event `SubagentStop` matching the agent's role and task
+2. Execute actions: `log` (record metrics), `notify` (queue notification), `check` (run validation)
+3. If any enforce-mode check fails, include it as a blocker in the proposal
+4. Continue with standard SubagentStop evaluation
+
+### During StageTransition
+
+Before including a stage transition in a proposal:
+1. Find all enabled hooks with event `StageTransition` matching `from` and `to` stages
+2. For enforce-mode `check` hooks: run the command. If it fails, do NOT propose the transition.
+3. For advisory-mode `check` hooks: run the command. Include result as a note in the proposal.
+4. For `block` hooks: do NOT propose the transition (unconditional block).
+5. For `notify` hooks: queue notifications for enabled messenger channels.
+
+### During TaskCompleted
+
+After a task reaches completed status:
+1. Find all enabled hooks with event `TaskCompleted` matching the task's tags
+2. Execute `check` actions (e.g., adventure completion verification)
+3. Execute `notify` actions (send completion notifications)
+4. Execute `log` actions (record final metrics)
+
+## Agent Memory Injection
+
+When spawning any agent, inject its persistent memory into the spawn prompt:
+
+1. Determine the role name from `stage_assignments` in config.md
+2. Check if `.agent/agent-memory/{role}/MEMORY.md` exists
+3. If it exists: read the first 200 lines and include in the spawn prompt:
+   ```
+   # Persistent Agent Memory
+
+   Your memory directory is at `.agent/agent-memory/{role}/`. Its contents persist across conversations.
+
+   As you work, consult your memory files to build on previous experience. When you encounter something worth remembering, update your memory before completing the task.
+
+   ## MEMORY.md
+
+   {first 200 lines of .agent/agent-memory/{role}/MEMORY.md}
+   ```
+4. If it does not exist: include a prompt to initialize memory:
+   ```
+   # Persistent Agent Memory
+
+   Your memory directory is at `.agent/agent-memory/{role}/`. Its contents persist across conversations.
+
+   No memory file found. After completing this task, create `.agent/agent-memory/{role}/MEMORY.md` with key learnings worth remembering for future tasks.
+   ```
+5. Place this section after the role template instructions and before the task-specific prompt
+
 ## Role Resolution
 
 When proposing which role to assign:
 1. Read `.agent/config.md` -> `stage_assignments`
 2. Read the role file from `.agent/roles/{role}.md` (if exists) or `agents/{role}.md`
 3. Include role name and model in the proposal
+
+## Rules Injection
+
+Before spawning any agent for a task, check `.agent/rules/` for path-scoped rules matching the task's files.
+
+### Process
+
+1. Read the task's `files` field from frontmatter
+2. If `.agent/rules/` directory exists, read all `.md` files in it
+3. For each rule file, read its `paths` frontmatter (array of glob patterns)
+4. A rule matches if ANY task file matches ANY of its glob patterns
+5. Rules with no `paths` field match all tasks (global rules)
+6. Collect all matching rules
+
+### Injection
+
+If matching rules are found, append a `# Path-Scoped Rules` section to the agent's spawn prompt after the role template and before the task-specific prompt:
+
+```
+# Path-Scoped Rules
+
+The following rules apply to files in this task. Follow these instructions when working on the matched files.
+
+## {rule-file-name} (matched: {file1}, {file2})
+
+{full rule body content}
+
+---
+
+## {another-rule-file-name} (matched: {file3})
+
+{full rule body content}
+```
+
+If no rules match, omit the section entirely.
+
+### Rules
+
+- ALWAYS check `.agent/rules/` before spawning agents (skip silently if directory does not exist)
+- ALWAYS inject matching rules into the agent's spawn prompt
+- NEVER modify rule files -- they are user-maintained
 
 ## Adventure Management
 
@@ -253,8 +394,6 @@ After a researcher completes for an adventure task:
 
 ## Rules
 
-- NEVER advance tasks, spawn agents, or send notifications without user approval
-- NEVER modify task files (status, stage, assignee) -- only propose changes
 - ALWAYS write updated state to `.agent/lead-state.md` after analysis
 - ALWAYS show reasoning for non-obvious recommendations
 - Keep proposals concise -- numbered actions with one-line reasons
@@ -264,3 +403,8 @@ After a researcher completes for an adventure task:
 - NEVER run `git add .` or `git add -A` -- always stage specific files
 - NEVER force push or rewrite history
 - ALWAYS include git proposals when config has `git:` block and a stage transition involves code changes
+- ALWAYS read `.agent/hooks.md` before evaluating pipeline events (if it exists)
+- ALWAYS inject PreToolUse/PostToolUse hook instructions into agent prompts before spawning
+- NEVER skip enforce-mode hooks -- they are mandatory quality gates
+- ALWAYS inject agent memory (MEMORY.md first 200 lines) into agent spawn prompts
+- ALWAYS check `.agent/rules/` for path-scoped rules matching task files before spawning agents
