@@ -3,21 +3,23 @@
  */
 
 // Valid pipeline stages
-export const STAGES = ['planning', 'implementing', 'reviewing', 'fixing', 'completed', 'researching'];
+export const STAGES = ['planning', 'preparing', 'implementing', 'reviewing', 'fixing', 'completed', 'researching'];
 
 // Valid statuses per stage
 export const STAGE_STATUSES = {
   planning: ['in_progress', 'ready', 'blocked_on_question', 'BLOCKED', 'error'],
+  preparing: ['in_progress', 'ready', 'blocked_on_question', 'BLOCKED', 'error'],
   implementing: ['in_progress', 'ready', 'blocked_on_question', 'BLOCKED', 'error'],
   reviewing: ['in_progress', 'passed', 'failed', 'blocked_on_question', 'BLOCKED', 'error'],
   fixing: ['in_progress', 'ready', 'blocked_on_question', 'BLOCKED', 'error'],
-  completed: ['done'],
+  completed: ['done', 'cancelled'],
   researching: ['in_progress', 'done', 'error'],
 };
 
 // Valid stage transitions (from -> to)
 export const VALID_TRANSITIONS = {
-  planning: ['implementing'],
+  planning: ['preparing', 'implementing'],  // preparing for adventure tasks, implementing for standalone
+  preparing: ['implementing'],
   implementing: ['reviewing'],
   reviewing: ['fixing', 'completed'],
   fixing: ['reviewing'],
@@ -25,9 +27,13 @@ export const VALID_TRANSITIONS = {
   researching: [], // terminal stage
 };
 
+// Task ID patterns: standalone (TASK-001) and adventure (ADV015-T001)
+export const TASK_ID_PATTERN = /^(TASK-\d{3,}|ADV\d{3,}-T\d{3,})$/;
+
 // Stage-to-default-assignee mapping
 export const STAGE_ASSIGNEES = {
   planning: 'planner',
+  preparing: 'adventure-preparer',
   implementing: 'implementer',
   reviewing: 'reviewer',
   fixing: 'implementer',
@@ -118,8 +124,14 @@ export function validateTransition(fromStage, toStage) {
  * Returns next stage string or null if no automatic transition.
  */
 export function getNextStage(currentStage, status) {
-  // planning -> implementing (when ready)
+  // planning -> implementing (when ready, standalone tasks)
+  // Note: adventure tasks go planning -> preparing instead (handled by lead routing)
   if (currentStage === 'planning' && status === 'ready') {
+    return 'implementing';
+  }
+
+  // preparing -> implementing (when ready, adventure tasks only)
+  if (currentStage === 'preparing' && status === 'ready') {
     return 'implementing';
   }
 
@@ -158,12 +170,18 @@ export function getDefaultAssignee(stage) {
 
 // ---- Adventure state machine ----
 
-export const ADVENTURE_STATES = ['planning', 'active', 'paused', 'completed', 'cancelled'];
+export const ADVENTURE_STATES = [
+  'concept', 'planning', 'review', 'active',
+  'paused', 'blocked', 'completed', 'cancelled',
+];
 
 export const ADVENTURE_TRANSITIONS = {
-  planning: ['active', 'cancelled'],
-  active: ['paused', 'completed', 'cancelled'],
+  concept: ['planning', 'cancelled'],
+  planning: ['review', 'cancelled'],
+  review: ['active', 'planning', 'cancelled'],
+  active: ['paused', 'completed', 'blocked', 'cancelled'],
   paused: ['active', 'cancelled'],
+  blocked: ['active', 'cancelled'],
   // completed and cancelled are terminal
 };
 

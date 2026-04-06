@@ -212,7 +212,7 @@ async function listAdventures(stateFilter = null) {
   const entries = await readdir(adventuresDir);
   const adventures = [];
   for (const entry of entries) {
-    if (!/^ADV-\d{3}$/.test(entry)) continue;
+    if (!/^ADV-\d{3,}$/.test(entry)) continue;
     const manifestPath = join(adventuresDir, entry, 'manifest.md');
     if (!existsSync(manifestPath)) continue;
     const { frontmatter } = await readState(manifestPath);

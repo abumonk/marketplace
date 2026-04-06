@@ -194,7 +194,7 @@ test('cascade delete: detects orphan task files not in manifest.tasks', async ()
   const files = await readdir(tasksDir);
   const fsTaskIds = new Set();
   for (const f of files) {
-    const match = f.match(/^(ADV\d{3}-T\d{3})\.md$/);
+    const match = f.match(/^(ADV\d{3,}-T\d{3,})\.md$/);
     if (match) fsTaskIds.add(match[1]);
   }
   const allTaskIds = new Set([...manifestTaskIds, ...fsTaskIds]);

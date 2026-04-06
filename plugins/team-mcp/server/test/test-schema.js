@@ -15,6 +15,7 @@ import {
   getNextStage,
   STAGES,
   VALID_TRANSITIONS,
+  TASK_ID_PATTERN,
 } from '../lib/schema.js';
 
 // ---------------------------------------------------------------------------
@@ -256,4 +257,36 @@ test('getNextStage: completed + any => null (no auto-transition)', () => {
 test('getNextStage: researching + any => null (terminal)', () => {
   assert.equal(getNextStage('researching', 'done'), null);
   assert.equal(getNextStage('researching', 'in_progress'), null);
+});
+
+// ---------------------------------------------------------------------------
+// TASK_ID_PATTERN — 3+ digit support
+// ---------------------------------------------------------------------------
+
+test('TASK_ID_PATTERN: matches 3-digit TASK IDs', () => {
+  assert.ok(TASK_ID_PATTERN.test('TASK-001'));
+  assert.ok(TASK_ID_PATTERN.test('TASK-999'));
+});
+
+test('TASK_ID_PATTERN: matches 4+ digit TASK IDs', () => {
+  assert.ok(TASK_ID_PATTERN.test('TASK-1000'));
+  assert.ok(TASK_ID_PATTERN.test('TASK-9999'));
+});
+
+test('TASK_ID_PATTERN: matches 3-digit adventure task IDs', () => {
+  assert.ok(TASK_ID_PATTERN.test('ADV001-T001'));
+  assert.ok(TASK_ID_PATTERN.test('ADV100-T001'));
+});
+
+test('TASK_ID_PATTERN: matches 4+ digit adventure task IDs', () => {
+  assert.ok(TASK_ID_PATTERN.test('ADV1000-T001'));
+  assert.ok(TASK_ID_PATTERN.test('ADV001-T1000'));
+  assert.ok(TASK_ID_PATTERN.test('ADV1000-T1000'));
+});
+
+test('TASK_ID_PATTERN: rejects IDs with fewer than 3 digits', () => {
+  assert.equal(TASK_ID_PATTERN.test('TASK-01'), false);
+  assert.equal(TASK_ID_PATTERN.test('TASK-1'), false);
+  assert.equal(TASK_ID_PATTERN.test('ADV01-T001'), false);
+  assert.equal(TASK_ID_PATTERN.test('ADV001-T01'), false);
 });

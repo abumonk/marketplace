@@ -21,8 +21,41 @@ import {
   getNextStage,
   getDefaultAssignee,
   STAGES,
+  TASK_ID_PATTERN,
 } from '../schema.js';
 import { eventEmitter } from '../events.js';
+
+/**
+ * Resolve the file path for a task based on its ID format.
+ * - TASK-NNN: lives in .agent/tasks/
+ * - ADV{NNN}-T{NNN}: lives in .agent/adventures/ADV-{NNN}/tasks/
+ *
+ * @param {string} agentDir - Path to the .agent/ directory
+ * @param {string} taskId - Task ID (e.g., TASK-001 or ADV015-T001)
+ * @returns {{ taskPath: string, isAdventure: boolean, adventureId: string|null }}
+ */
+function resolveTaskPath(agentDir, taskId) {
+  const advMatch = taskId.match(/^ADV(\d{3,})-T\d{3,}$/);
+  if (advMatch) {
+    const adventureId = `ADV-${advMatch[1]}`;
+    const taskPath = join(agentDir, 'adventures', adventureId, 'tasks', `${taskId}.md`);
+    return { taskPath, isAdventure: true, adventureId };
+  }
+  const taskPath = join(agentDir, 'tasks', `${taskId}.md`);
+  return { taskPath, isAdventure: false, adventureId: null };
+}
+
+/**
+ * Resolve the archive path for a task.
+ */
+function resolveArchivePath(agentDir, taskId) {
+  const advMatch = taskId.match(/^ADV(\d{3,})-T\d{3,}$/);
+  if (advMatch) {
+    const adventureId = `ADV-${advMatch[1]}`;
+    return join(agentDir, 'adventures', adventureId, 'tasks', 'archive', `${taskId}.md`);
+  }
+  return join(agentDir, 'tasks', 'archive', `${taskId}.md`);
+}
 
 /**
  * Register all task management tools.
@@ -52,8 +85,8 @@ export function registerTaskTools(server) {
         // Find highest TASK-NNN number
         const taskFiles = await readdir(tasksDir);
         const taskNumbers = taskFiles
-          .filter((f) => /^TASK-\d{3}\.md$/.test(f))
-          .map((f) => parseInt(f.match(/\d{3}/)[0], 10));
+          .filter((f) => /^TASK-\d{3,}\.md$/.test(f))
+          .map((f) => parseInt(f.match(/TASK-(\d+)/)[1], 10));
         const nextNumber = taskNumbers.length > 0 ? Math.max(...taskNumbers) + 1 : 1;
         const taskId = `TASK-${String(nextNumber).padStart(3, '0')}`;
         const taskPath = join(tasksDir, `${taskId}.md`);
@@ -149,7 +182,7 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const taskPath = join(agentDir, 'tasks', `${id}.md`);
+        const { taskPath } = resolveTaskPath(agentDir, id);
         if (!existsSync(taskPath)) {
           throw new Error(`Task ${id} not found`);
         }
@@ -197,36 +230,48 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const tasksDir = join(agentDir, 'tasks');
-        if (!existsSync(tasksDir)) {
-          return {
-            content: [{ type: 'text', text: JSON.stringify([]) }],
-          };
-        }
-
-        const taskFiles = await readdir(tasksDir);
         const tasks = [];
 
-        for (const file of taskFiles) {
-          if (!/^TASK-\d{3}\.md$/.test(file)) continue;
+        // Helper to read tasks from a directory and apply filters
+        const scanDir = async (dir, pattern) => {
+          if (!existsSync(dir)) return;
+          const files = await readdir(dir);
+          for (const file of files) {
+            if (!pattern.test(file)) continue;
+            const taskPath = join(dir, file);
+            try {
+              const { frontmatter } = await readState(taskPath);
+              if (stage && frontmatter.stage !== stage) continue;
+              if (status && frontmatter.status !== status) continue;
+              if (assignee && frontmatter.assignee !== assignee) continue;
+              tasks.push({
+                id: frontmatter.id,
+                title: frontmatter.title,
+                stage: frontmatter.stage,
+                status: frontmatter.status,
+                assignee: frontmatter.assignee,
+                iterations: frontmatter.iterations,
+                updated: frontmatter.updated,
+                ...(frontmatter.adventure_id && { adventure_id: frontmatter.adventure_id }),
+              });
+            } catch {
+              // Skip unreadable files
+            }
+          }
+        };
 
-          const taskPath = join(tasksDir, file);
-          const { frontmatter } = await readState(taskPath);
+        // 1. Scan global .agent/tasks/ for standalone tasks (TASK-NNN)
+        await scanDir(join(agentDir, 'tasks'), /^TASK-\d{3,}\.md$/);
 
-          // Apply filters
-          if (stage && frontmatter.stage !== stage) continue;
-          if (status && frontmatter.status !== status) continue;
-          if (assignee && frontmatter.assignee !== assignee) continue;
-
-          tasks.push({
-            id: frontmatter.id,
-            title: frontmatter.title,
-            stage: frontmatter.stage,
-            status: frontmatter.status,
-            assignee: frontmatter.assignee,
-            iterations: frontmatter.iterations,
-            updated: frontmatter.updated,
-          });
+        // 2. Scan each adventure's tasks/ directory for adventure tasks (ADV{NNN}-T{NNN})
+        const adventuresDir = join(agentDir, 'adventures');
+        if (existsSync(adventuresDir)) {
+          const advEntries = await readdir(adventuresDir);
+          for (const advEntry of advEntries) {
+            if (!/^ADV-\d{3,}$/.test(advEntry)) continue;
+            const advTasksDir = join(adventuresDir, advEntry, 'tasks');
+            await scanDir(advTasksDir, /^ADV\d{3,}-T\d{3,}\.md$/);
+          }
         }
 
         // Sort by updated timestamp (most recent first)
@@ -269,7 +314,7 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const taskPath = join(agentDir, 'tasks', `${id}.md`);
+        const { taskPath } = resolveTaskPath(agentDir, id);
         if (!existsSync(taskPath)) {
           throw new Error(`Task ${id} not found`);
         }
@@ -344,7 +389,7 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const taskPath = join(agentDir, 'tasks', `${id}.md`);
+        const { taskPath, isAdventure } = resolveTaskPath(agentDir, id);
         if (!existsSync(taskPath)) {
           throw new Error(`Task ${id} not found`);
         }
@@ -352,7 +397,13 @@ ${logEntry('created: Task created')}
         const { frontmatter, body } = await readState(taskPath);
 
         // Determine next stage
-        const nextStage = getNextStage(frontmatter.stage, frontmatter.status);
+        // Adventure tasks: planning -> preparing (not implementing)
+        let nextStage;
+        if (isAdventure && frontmatter.stage === 'planning' && frontmatter.status === 'ready') {
+          nextStage = 'preparing';
+        } else {
+          nextStage = getNextStage(frontmatter.stage, frontmatter.status);
+        }
         if (!nextStage) {
           throw new Error(`Cannot advance task ${id}: stage '${frontmatter.stage}' with status '${frontmatter.status}' has no automatic transition`);
         }
@@ -363,11 +414,10 @@ ${logEntry('created: Task created')}
           throw new Error(`Transition validation failed: ${transitionValidation.error}`);
         }
 
-        // Check dependencies
+        // Check dependencies — resolve each dep via resolveTaskPath
         if (frontmatter.depends_on && frontmatter.depends_on.length > 0) {
-          const tasksDir = join(agentDir, 'tasks');
           for (const depId of frontmatter.depends_on) {
-            const depPath = join(tasksDir, `${depId}.md`);
+            const { taskPath: depPath } = resolveTaskPath(agentDir, depId);
             if (!existsSync(depPath)) {
               throw new Error(`Dependency ${depId} not found`);
             }
@@ -455,7 +505,7 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const taskPath = join(agentDir, 'tasks', `${id}.md`);
+        const { taskPath } = resolveTaskPath(agentDir, id);
         if (!existsSync(taskPath)) {
           throw new Error(`Task ${id} not found`);
         }
@@ -511,16 +561,13 @@ ${logEntry('created: Task created')}
           throw new Error('Could not find .agent/ directory');
         }
 
-        const tasksDir = join(agentDir, 'tasks');
-        const archiveDir = join(tasksDir, 'archive');
-        await ensureDir(archiveDir);
-
-        const taskPath = join(tasksDir, `${id}.md`);
+        const { taskPath } = resolveTaskPath(agentDir, id);
         if (!existsSync(taskPath)) {
           throw new Error(`Task ${id} not found`);
         }
 
-        const archivePath = join(archiveDir, `${id}.md`);
+        const archivePath = resolveArchivePath(agentDir, id);
+        await ensureDir(join(archivePath, '..'));
 
         // Move file
         await moveFile(taskPath, archivePath);

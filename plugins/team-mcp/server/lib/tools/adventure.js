@@ -136,8 +136,8 @@ export function registerAdventureTools(server) {
           existingDirs = await readdir(adventuresDir);
         }
         const advNumbers = existingDirs
-          .filter((d) => /^ADV-\d{3}$/.test(d))
-          .map((d) => parseInt(d.match(/\d{3}/)[0], 10));
+          .filter((d) => /^ADV-\d{3,}$/.test(d))
+          .map((d) => parseInt(d.match(/ADV-(\d+)/)[1], 10));
         const nextNumber = advNumbers.length > 0 ? Math.max(...advNumbers) + 1 : 1;
         const advId = `ADV-${String(nextNumber).padStart(3, '0')}`;
 
@@ -368,7 +368,7 @@ agent_runs: 0
         const adventures = [];
 
         for (const entry of entries) {
-          if (!/^ADV-\d{3}$/.test(entry)) continue;
+          if (!/^ADV-\d{3,}$/.test(entry)) continue;
 
           const manifestPath = join(adventuresDir, entry, 'manifest.md');
           if (!existsSync(manifestPath)) continue;
@@ -546,7 +546,7 @@ agent_runs: 0
           if (existsSync(advTasksDir)) {
             const files = await readdir(advTasksDir);
             for (const f of files) {
-              const match = f.match(/^(ADV\d{3}-T\d{3})\.md$/);
+              const match = f.match(/^(ADV\d{3,}-T\d{3,})\.md$/);
               if (match) fsTaskIds.add(match[1]);
             }
           }
@@ -855,7 +855,7 @@ agent_runs: 0
         if (existsSync(advTasksDir)) {
           existingFiles = await readdir(advTasksDir);
         }
-        const taskPattern = new RegExp(`^ADV${advNum}-T(\\d{3})\\.md$`);
+        const taskPattern = new RegExp(`^ADV${advNum}-T(\\d{3,})\\.md$`);
         const taskNumbers = existingFiles
           .map((f) => { const m = f.match(taskPattern); return m ? parseInt(m[1], 10) : 0; })
           .filter((n) => n > 0);

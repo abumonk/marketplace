@@ -13,7 +13,7 @@ description: Display the current status of all tasks in the pipeline, grouped by
 
 3. Parse the YAML frontmatter of each task file to extract: `id`, `title`, `stage`, `status`, `assignee`, `iterations`, `updated`.
 
-4. Display as a table grouped by stage, ordered: planning, implementing, reviewing, fixing, blocked, then completed tasks from `archive/` (last 5 only):
+4. Display as a table grouped by stage, ordered: planning, implementing, reviewing, fixing, blocked, then completed tasks from `archive/` (last 5 only). Scan both `.agent/tasks/archive/` and `.agent/adventures/ADV-*/tasks/archive/` for completed tasks:
 
    ```
    ## Pipeline Status
