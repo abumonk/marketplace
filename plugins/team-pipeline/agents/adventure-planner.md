@@ -127,7 +127,78 @@ Proof methods:
 - `poc`: Proof-of-concept command or script
 - `manual`: Human verification needed (use sparingly)
 
-### Phase 6: Update Manifest
+### Phase 6: Permission Analysis (4-Pass Strategy)
+
+Goal: produce `.agent/adventures/{ADV-ID}/permissions.md` with zero runtime permission gaps.
+
+**Pass 1 — Codebase Tooling Scan**: Read project infrastructure to discover all tools agents will need:
+- `package.json` scripts, dependencies, devDependencies
+- `Makefile`, `Taskfile`, `justfile` — build commands
+- Test configs (`jest.config`, `vitest.config`, `playwright.config`) — test runners and flags
+- Linter/formatter configs (`.eslintrc`, `.prettierrc`, `biome.json`)
+- `tsconfig.json` — if TypeScript compilation is required
+- `.github/workflows/` — CI commands
+
+**Pass 2 — Plan-Driven Analysis**: For each task in the plan, trace the full execution path:
+- Files to read, write, delete per agent role
+- Shell commands each agent must run (install, build, test, lint, git)
+- MCP tools needed, external access (WebSearch, WebFetch)
+- Directory creation
+
+**Pass 3 — Historical Pattern Match**: Read `.agent/knowledge/` for:
+- What permissions similar adventures actually used
+- What unexpected blocks occurred in past runs
+- What permissions were amended mid-adventure
+
+**Pass 4 — Cross-Validation Matrix**: Build a validation matrix and check for completeness:
+
+```markdown
+| Task | Agent | Stage | Read | Write | Shell | MCP | External | Verified |
+|------|-------|-------|------|-------|-------|-----|----------|----------|
+```
+
+Validation checks:
+1. Every task has at least one permission entry per assigned agent role
+2. Every shell command from Pass 1 that relates to a task is covered
+3. Every `proof_command` in target conditions is covered
+4. Every file in the task's `files` field has a read or write permission
+5. Dependent tasks' agents have read access to predecessor output files
+6. Git operations covered if `git.mode` is `branch-per-task`
+
+Write the complete `permissions.md` with frontmatter (`status: pending_approval`, `passes_completed: 4`, `validation_gaps: 0`) and all permission tables (Shell Access, File Access, MCP Tools, External Access, Validation Matrix).
+
+### Phase 7: Mandatory Test Tasks
+
+Every adventure plan MUST include these two tasks:
+
+1. **Test Design Task** (early T-number, e.g., T002):
+   - Title: "Design test strategy for {adventure title}"
+   - Create `tests/test-strategy.md` with: test files, frameworks, commands for each TC with `proof_method: autotest`
+   - No dependencies (can run early alongside design work)
+
+2. **Test Implementation Task** (late T-number, near end):
+   - Title: "Implement automated tests for {adventure title}"
+   - Depends on: test design task + all implementation tasks it tests
+   - Each TC with `proof_method: autotest` must have a passing test
+   - Run all tests and verify
+
+### Phase 8: Custom Roles
+
+For each agent role needed in this adventure (implementer, reviewer, researcher):
+1. Start with the default role template from `roles/templates/`
+2. **Trim**: Remove sections irrelevant to this adventure's tech stack
+3. **Inject**: Add adventure-specific context (target files, schemas, design decisions, testing requirements)
+4. **Optimize**: Focus only on technologies and file patterns that exist in the plan
+5. Write to `.agent/adventures/{ADV-ID}/roles/{role}.md` with frontmatter:
+   ```yaml
+   name: {role}
+   adventure_id: {ADV-ID}
+   based_on: default/{role}
+   trimmed_sections: [...]
+   injected_context: [...]
+   ```
+
+### Phase 9: Update Manifest
 
 Update the adventure manifest with:
 1. Evaluations table with all tasks
@@ -138,9 +209,12 @@ Update the adventure manifest with:
 ## Rules
 
 - Never execute code (you have no Bash access)
-- Never modify project source code -- only `.agent/adventures/` files
+- Never modify project source code — only `.agent/adventures/` files
 - Always check knowledge base before designing
 - Keep designs minimal and focused
 - Every task must have at least one target condition
 - Every target condition must have a proof method
-- Set adventure `state: review` only when all artifacts are complete
+- Every plan must include mandatory test tasks (design + implementation)
+- Permission analysis must complete all 4 passes with 0 validation gaps
+- Custom roles must be generated for all agent roles used in the adventure
+- Set adventure `state: review` only when ALL artifacts are complete (designs, schemas, plans, evaluations, TCs, permissions, roles)

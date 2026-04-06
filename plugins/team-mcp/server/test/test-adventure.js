@@ -21,8 +21,8 @@ import { parseFrontmatter } from '../lib/state.js';
 // validateAdventureTransition
 // ---------------------------------------------------------------------------
 
-test('validateAdventureTransition: planning -> active is valid', () => {
-  const result = validateAdventureTransition('planning', 'active');
+test('validateAdventureTransition: planning -> review is valid', () => {
+  const result = validateAdventureTransition('planning', 'review');
   assert.equal(result.valid, true);
 });
 
@@ -77,12 +77,15 @@ test('validateAdventureTransition: invalid to state returns error', () => {
 // ADVENTURE_STATES
 // ---------------------------------------------------------------------------
 
-test('ADVENTURE_STATES: contains all 5 states', () => {
+test('ADVENTURE_STATES: contains all 8 states', () => {
   assert.ok(Array.isArray(ADVENTURE_STATES));
-  assert.equal(ADVENTURE_STATES.length, 5);
+  assert.equal(ADVENTURE_STATES.length, 8);
+  assert.ok(ADVENTURE_STATES.includes('concept'));
   assert.ok(ADVENTURE_STATES.includes('planning'));
+  assert.ok(ADVENTURE_STATES.includes('review'));
   assert.ok(ADVENTURE_STATES.includes('active'));
   assert.ok(ADVENTURE_STATES.includes('paused'));
+  assert.ok(ADVENTURE_STATES.includes('blocked'));
   assert.ok(ADVENTURE_STATES.includes('completed'));
   assert.ok(ADVENTURE_STATES.includes('cancelled'));
 });
@@ -96,9 +99,9 @@ test('ADVENTURE_TRANSITIONS: planning has 2 transitions', () => {
   assert.equal(ADVENTURE_TRANSITIONS.planning.length, 2);
 });
 
-test('ADVENTURE_TRANSITIONS: active has 3 transitions', () => {
+test('ADVENTURE_TRANSITIONS: active has 4 transitions', () => {
   assert.ok(Array.isArray(ADVENTURE_TRANSITIONS.active));
-  assert.equal(ADVENTURE_TRANSITIONS.active.length, 3);
+  assert.equal(ADVENTURE_TRANSITIONS.active.length, 4);
 });
 
 test('ADVENTURE_TRANSITIONS: paused has 2 transitions', () => {
