@@ -1,7 +1,7 @@
 {
   "name": "team-pipeline",
   "description": "Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents. Supports feature adventures, lifecycle hooks, agent persistent memory, skills v2, composite skills, and path-scoped rules.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "author": {
     "name": "Claudovka"
   },
