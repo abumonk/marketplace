@@ -16,51 +16,105 @@ Check that `.agent/tasks/` exists. If not, tell the user to run `/task-init` fir
 
 If `.agent/adventures/` does not exist, create it.
 
-### 2. Extract Concept
+### 2. Generate Adventure ID
+
+Scan `.agent/adventures/` for existing adventure directories matching pattern `ADV-*`. Find the highest number and increment by 1. If none exist, start at `ADV-001`.
+
+### 3. Create Adventure Directory Structure
+
+Create the full directory tree:
+```
+.agent/adventures/{ADV-ID}/
+.agent/adventures/{ADV-ID}/designs/
+.agent/adventures/{ADV-ID}/plans/
+.agent/adventures/{ADV-ID}/schemas/
+.agent/adventures/{ADV-ID}/tasks/
+.agent/adventures/{ADV-ID}/tasks/archive/
+.agent/adventures/{ADV-ID}/roles/
+.agent/adventures/{ADV-ID}/tests/
+```
+
+### 4. Extract Concept
 
 The user's prompt is in $ARGUMENTS. Formulate a concept from it:
 - **Title**: Short name for the feature (derive from the prompt)
 - **Concept**: The full user prompt plus any clarifying context from the conversation
 
-### 3. Collect Environment Data
+### 5. Collect Environment Data
 
-Gather environment context for the adventure manifest:
-- **project**: Read from `CLAUDE.md` title or workspace root directory name
-- **workspace**: Current working directory (absolute path)
-- **repo**: Run `git remote get-url origin` (use "local" if no remote)
-- **branch**: Run `git branch --show-current`
-- **pc**: Read from `$COMPUTERNAME` or `hostname` command
-- **platform**: OS info (e.g., "Windows 11 Pro 10.0.26200")
-- **runtime**: Run `node --version`
-- **shell**: Read from `$SHELL` environment variable or detect from context
+Gather project and system context:
+- **Project**: read from `CLAUDE.md` title or workspace root directory name
+- **Workspace**: current working directory
+- **Repo**: run `git remote get-url origin` (or "local" if no remote)
+- **Branch**: run `git branch --show-current`
+- **PC**: hostname from environment
+- **Platform**: OS type and version
+- **Runtime**: run `node --version`
+- **Shell**: from $SHELL or environment
 
-### 4. Create Adventure via MCP
+### 6. Create Adventure Manifest
 
-If `pipeline.adventure_create` MCP tool is available, use it:
+Write `.agent/adventures/{ADV-ID}/manifest.md`:
+
+```markdown
+---
+id: {ADV-ID}
+title: {title}
+state: concept
+created: {ISO timestamp}
+updated: {ISO timestamp}
+tasks: []
+---
+
+## Concept
+{concept text from user prompt}
+
+## Target Conditions
+| ID | Description | Source | Design | Plan | Task(s) | Proof Method | Proof Command | Status |
+|----|-------------|--------|--------|------|---------|-------------|---------------|--------|
+
+## Evaluations
+| Task | Access Requirements | Skill Set | Est. Duration | Est. Tokens | Est. Cost | Actual Duration | Actual Tokens | Actual Cost | Variance |
+|------|-------------------|-----------|---------------|-------------|-----------|-----------------|---------------|-------------|----------|
+
+## Environment
+- **Project**: {project name}
+- **Workspace**: {workspace root path}
+- **Repo**: {git remote URL or "local"}
+- **Branch**: {base branch}
+- **PC**: {hostname}
+- **Platform**: {OS version}
+- **Runtime**: {node version}
+- **Shell**: {shell type}
 ```
-pipeline.adventure_create({
-  title: {title},
-  concept: {concept text},
-  tags: [{derived tags}],
-  environment: {
-    project: {project},
-    workspace: {workspace},
-    repo: {repo},
-    branch: {branch},
-    pc: {pc},
-    platform: {platform},
-    runtime: {runtime},
-    shell: {shell}
-  }
-})
+
+### 7. Initialize Adventure Log
+
+Create `.agent/adventures/{ADV-ID}/adventure.log` with the first entry:
+```
+[{ISO timestamp}] lead | "adventure created: {ADV-ID} {title}"
 ```
 
-If MCP is not available, fall back to direct file creation:
-1. Scan `.agent/adventures/` for existing `ADV-*` directories, find highest number, increment by 1
-2. Create directory structure: `{ADV-ID}/`, `designs/`, `plans/`, `schemas/`, `tasks/`, `tasks/archive/`, `roles/`, `tests/`
-3. Write `manifest.md` with frontmatter and body including the environment section
+### 8. Initialize Adventure Metrics
 
-### 6. Checkpoint 1: Concept Approval
+Create `.agent/adventures/{ADV-ID}/metrics.md`:
+```markdown
+---
+adventure_id: {ADV-ID}
+total_tokens_in: 0
+total_tokens_out: 0
+total_duration: 0
+total_cost: 0.00
+agent_runs: 0
+---
+
+## Agent Runs
+
+| Agent | Task | Model | Tokens In | Tokens Out | Duration | Turns | Result |
+|-------|------|-------|-----------|------------|----------|-------|--------|
+```
+
+### 9. Checkpoint 1: Concept Approval
 
 Present the concept to the user:
 
@@ -75,48 +129,72 @@ Does this concept look right? I'll generate the full design, implementation plan
 
 Wait for user approval. If the user wants changes, update the concept and re-present.
 
-### 7. Spawn Adventure Planner (with failure recovery)
+### 10. Spawn Adventure Planner
 
 On approval, update the manifest:
 - Set `state: planning`
 - Set `updated` timestamp
 
+Append to `adventure.log`:
+```
+[{ISO timestamp}] lead | "state: concept -> planning"
+[{ISO timestamp}] lead | "spawned: adventure-planner for {ADV-ID}"
+```
+
 Spawn the `adventure-planner` agent in the background with this prompt:
-"Generate a complete feature adventure plan from the manifest at `.agent/adventures/{ADV-ID}/manifest.md`. Read the concept, explore the codebase, and produce: design documents, schemas, implementation plans, evaluations, target conditions, permissions document, custom roles, and task breakdown (including mandatory test tasks). Set adventure state to review when complete."
+"Generate a complete feature adventure plan from the manifest at `.agent/adventures/{ADV-ID}/manifest.md`. Read the concept, explore the codebase, and produce: design documents, schemas, implementation plans, evaluations, target conditions, task breakdown, permission analysis, and custom roles. Set adventure state to review when complete."
 
 Tell the user: "Adventure planner spawned for {ADV-ID}. It will generate designs, schemas, plans, evaluations, target conditions, permissions, and custom roles. Use `/adventure-status` to track progress."
 
-**Failure Recovery (C1)**:
-If the adventure-planner spawn fails or times out:
-1. First retry: re-spawn with a more focused prompt scoped to just the designs and plans
-2. If second attempt also fails:
-   - Reset adventure `state: concept` (so the user can retry or proceed manually)
-   - Log the failure to `adventure.log`
-   - Tell the user: "Adventure planner failed for {ADV-ID}. State reset to concept. You can retry with `/start-adventure` or create plans manually."
-3. Never leave an adventure stuck in `planning` state with no active planner agent
+#### Failure Recovery
 
-### 8. Checkpoint 2: Plan Approval and Task Creation (lead responsibility)
+If the adventure-planner agent fails (crash, timeout, or error detected by SubagentStop hook):
 
-**Ownership**: The lead agent (via SubagentStop hook) is responsible for checkpoint 2. Not the skill, not the hook directly. When SubagentStop detects adventure-planner completion:
+1. Read the manifest to check `state`. If still `planning` (planner never set `review`), this is a failure.
+2. Check what artifacts were created — read `designs/`, `plans/`, `schemas/` for partial output.
+3. **If no artifacts created** (complete failure):
+   - Rollback manifest `state` to `concept`
+   - Append to `adventure.log`: `[{timestamp}] lead | "planner failed: no artifacts, state -> concept"`
+   - Tell user: "Adventure planner failed for {ADV-ID}. Rolled back to concept. Retry or adjust the concept."
+4. **If partial artifacts created** (timeout or partial failure):
+   - Keep manifest `state` as `planning` (partial work is salvageable)
+   - Append to `adventure.log`: `[{timestamp}] lead | "planner partial failure: {N} designs, {N} plans created"`
+   - Tell user: "Planner partially completed. Options: (a) retry planner, (b) manually review and advance."
+5. **Never retry automatically** — always present recovery options and wait for user decision.
 
-1. Lead reads the adventure manifest and verifies `state: review`
-2. Lead presents the full plan to the user:
-   - Target conditions table
-   - Evaluations table with cost estimates
-   - Proposed task list from plans/
-   - Permissions document summary from permissions.md
-3. Wait for user approval
+### 11. Checkpoint 2: Plan & Permissions Approval (handled by lead/hook)
 
-**Atomic Task Creation (C2)**:
+When the adventure planner completes successfully (manifest `state` is `review`), the lead presents to the user:
+- Target conditions table
+- Evaluations table with cost estimates
+- Proposed task list
+- **Permission requests** from `permissions.md` (4-pass analysis)
+- **Custom roles** summary from `roles/`
 
-On user approval, the lead creates ALL task files atomically:
+User approves: plan, tasks, AND permissions together.
 
-1. Build the complete list of task files in memory first (do NOT write yet)
-2. For each task in the adventure's implementation plans, prepare a task file:
+On user approval, the **lead agent** creates task files using a validate-then-create approach:
+
+#### Phase A: Validate (dry run — no files written)
+
+1. Read all plans from `.agent/adventures/{ADV-ID}/plans/`
+2. For each task, collect: title, description, files, acceptance criteria, target conditions, evaluation, dependencies
+3. Task IDs use format `ADV{NNN}-T{NNN}` (e.g., `ADV015-T001`), numbered sequentially from T001
+4. Resolve `depends_on` references: convert task titles in plans to the assigned task IDs
+5. Validate all tasks:
+   - Every task has a title, description, and at least one target condition
+   - All `depends_on` references resolve to valid task IDs within this adventure
+   - All `target_conditions` TC-IDs exist in the manifest's target conditions table
+   - Test design and test implementation tasks are present
+6. If validation fails: report errors to the user and STOP.
+
+#### Phase B: Create (atomic batch — all or nothing)
+
+7. Create all task files at `.agent/adventures/{ADV-ID}/tasks/{task-id}.md`:
 
 ```markdown
 ---
-id: {ADV-TASK-ID}
+id: {ADV{NNN}-T{NNN}}
 title: {task title}
 stage: planning
 status: in_progress
@@ -126,10 +204,10 @@ iterations: 0
 assignee: planner
 files: {files from plan}
 repos: []
-depends_on: {dependencies from plan}
+depends_on: {resolved task IDs from phase A}
 tags: {derived from adventure}
 adventure_id: {ADV-ID}
-adventure_plan: {plan-NNN}
+adventure_plan: {plan-slug}
 target_conditions: [{TC-IDs}]
 evaluation:
   access_requirements: [{tools}]
@@ -148,22 +226,41 @@ evaluation:
 <!-- Filled by planner agent -->
 
 ## Log
-- [{timestamp}] created: Task created from adventure {ADV-ID}, plan {plan-NNN}
+- [{timestamp}] created: Task created from adventure {ADV-ID}
 ```
 
-3. Task IDs use adventure-scoped format: `ADV{NNN}-T{NNN}` (e.g., ADV015-T001)
-4. Task files are written to `.agent/adventures/{ADV-ID}/tasks/` (NOT global `.agent/tasks/`)
-5. Write all task files. If ANY write fails, delete all successfully written files (rollback) and report the error
-6. Only after all files are written successfully:
-   - Add all task IDs to the adventure manifest's `tasks` list
-   - Set adventure `state: active`
-   - Log to adventure.log
-7. Spawn the planner agent for the first batch of tasks (respecting dependency order)
+8. After ALL task files are created successfully, update the adventure manifest:
+   - Set `tasks: [{all task IDs}]`
+   - Set `state: active`
+   - Set `updated` timestamp
 
-**Custom Role Lookup**: When spawning any agent for an adventure task:
-1. Check `.agent/adventures/{ADV-ID}/roles/{role}.md` for an adventure-specific role
-2. If found: use the adventure role content as the agent's prompt context
-3. If not found: fall back to the default role in `roles/templates/{role}.md`
-4. Also inject approved permissions from `.agent/adventures/{ADV-ID}/permissions.md` into the agent spawn context
+9. Update `permissions.md` frontmatter: set `status: approved`, `approved: {timestamp}`
 
-Tell the user: "{N} tasks created for adventure {ADV-ID}. Planner agents spawned. Use `/adventure-status` to track progress."
+10. Append to `adventure.log`:
+```
+[{timestamp}] lead | "tasks created: {task IDs}"
+[{timestamp}] lead | "permissions approved"
+[{timestamp}] lead | "state: review -> active"
+```
+
+11. Spawn the planner agent for each task
+
+#### Phase C: Rollback (if any file creation fails)
+
+If any task file fails to write during Phase B:
+1. Delete all task files created so far in this batch
+2. Do NOT update the adventure manifest (state stays `review`)
+3. Append to `adventure.log`: `[{timestamp}] lead | "task creation FAILED: {error}"`
+4. Report the error to the user
+
+Tell the user: "{N} tasks created from adventure {ADV-ID}. Planner agents spawned. Use `/task-status` to track progress."
+
+### 12. Post-Review Task Creation
+
+During adventure execution, user may request additional tasks. These follow the same rules:
+
+1. New tasks are created in `.agent/adventures/{ADV-ID}/tasks/` with next sequential T-number
+2. New tasks use the same adventure's custom roles, log, and metrics
+3. Adventure must be `active` or `blocked` — reject for `completed` or `cancelled`
+4. If adventure was `blocked`, transition to `active` when new fixing tasks are created
+5. Append to `adventure.log`: `[{timestamp}] lead | "post-review task created: {task ID}"`
