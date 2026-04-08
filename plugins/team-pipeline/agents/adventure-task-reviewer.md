@@ -15,16 +15,16 @@ You receive a task file path and adventure ID. Review the implementation by runn
 
 ## Step Logging
 
-Log your progress to `.agent/adventures/{adventure_id}/adventure.log`. Use the Write tool (append mode) to log one line per step — never read the log file, only append:
+Log your progress to `.agent/adventures/{adventure_id}/adventure.log`. Use Bash `echo ... >>` to append one line per step — never read the log file, only append:
 
-```
-[{timestamp}] adventure-task-reviewer | "spawn: {task_id} reviewing"
-[{timestamp}] adventure-task-reviewer | "step 1/5: read task, design, manifest — {N} files to review"
-[{timestamp}] adventure-task-reviewer | "step 2/5: ran build — {pass/fail}"
-[{timestamp}] adventure-task-reviewer | "step 3/5: ran tests — {pass/fail}"
-[{timestamp}] adventure-task-reviewer | "step 4/5: checked {N} ACs, {N} TCs — {N} issues found"
-[{timestamp}] adventure-task-reviewer | "step 5/5: wrote review report — status {PASSED/FAILED}"
-[{timestamp}] adventure-task-reviewer | "complete: {N} issues, status {PASSED/FAILED}"
+```bash
+echo '[{timestamp}] adventure-task-reviewer | "spawn: {task_id} reviewing"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "step 1/5: read task, design, manifest — {N} files to review"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "step 2/5: ran build — {pass/fail}"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "step 3/5: ran tests — {pass/fail}"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "step 4/5: checked {N} ACs, {N} TCs — {N} issues found"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "step 5/5: wrote review report — status {PASSED/FAILED}"' >> .agent/adventures/{adventure_id}/adventure.log
+echo '[{timestamp}] adventure-task-reviewer | "complete: {N} issues, status {PASSED/FAILED}"' >> .agent/adventures/{adventure_id}/adventure.log
 ```
 
 Log `spawn` as first action. Log `complete` as last action. If blocked, log `blocked: {reason}`.
@@ -108,15 +108,15 @@ test_result: PASS | FAIL
 
 ## Record Metrics
 
-If the task has an `adventure_id` field, append your metrics row to `.agent/adventures/{adventure_id}/metrics.md` using the Write tool (append):
+If the task has an `adventure_id` field, append your metrics row to `.agent/adventures/{adventure_id}/metrics.md` using Bash `echo ... >>`:
 
-```
-| adventure-task-reviewer | {task_id} | sonnet | {tokens_in} | {tokens_out} | {duration} | {turns} | {passed/failed} |
+```bash
+echo '| adventure-task-reviewer | {task_id} | sonnet | {tokens_in} | {tokens_out} | {duration} | {turns} | {passed/failed} |' >> .agent/adventures/{adventure_id}/metrics.md
 ```
 
 ## Rules
 
-- Never modify source code -- the Write tool is only for review reports in `.agent/adventures/` and adventure log/metrics
+- Never modify source code -- the Write tool is only for review reports in `.agent/adventures/`; use Bash echo for log and metrics appends
 - Run actual build and test commands, do not guess results
 - Be specific about issues -- include file paths and line numbers
 - A task PASSES only if: build passes, tests pass, ALL acceptance criteria are met, AND all autotest/poc target conditions pass

@@ -44,7 +44,7 @@ M is typically 3-4 steps. If the task has no adventure_id, skip this section. Lo
    b. Find this task's row in the `## Evaluations` table
    c. Record actual metrics from this task's execution:
       - Actual duration: from task log timestamps (first entry to last entry)
-      - Actual tokens: from `.agent/metrics.md` agent log entries for this task
+      - Actual tokens: from `.agent/adventures/{adventure_id}/metrics.md` agent log entries for this task (not from the global `.agent/metrics.md`)
       - Actual cost: compute from actual tokens using rates in `.agent/config.md` adventure settings
    d. Compute variance: `(actual - estimated) / estimated * 100`
    e. Update the evaluations table row with actual values and variance

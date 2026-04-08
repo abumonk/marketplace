@@ -106,11 +106,13 @@ Verify that at least one task review file exists in `.agent/adventures/{ADV-ID}/
 If no review files exist (all failed in Step 3): report "No task reviews available. Cannot proceed with adventure-level review." and stop.
 
 Spawn the `adventure-reviewer` agent with prompt:
-"Analyze adventure {ADV-ID} from manifest at `.agent/adventures/{ADV-ID}/manifest.md`. Read all task reviews in `.agent/adventures/{ADV-ID}/reviews/`. Write the adventure report to `.agent/adventures/{ADV-ID}/adventure-report.md`."
+"Analyze adventure {ADV-ID} from manifest at `.agent/adventures/{ADV-ID}/manifest.md`. Read all task reviews in `.agent/adventures/{ADV-ID}/reviews/`. Write the adventure report to `.agent/adventures/{ADV-ID}/reviews/adventure-report.md`."
 
-Wait for completion. Verify that `.agent/adventures/{ADV-ID}/adventure-report.md` was created.
+Wait for completion. Verify that `.agent/adventures/{ADV-ID}/reviews/adventure-report.md` was created.
 
-If the report file was created, report: "Adventure report generated at `.agent/adventures/{ADV-ID}/adventure-report.md`"
+If the report file was created, report: "Adventure report generated at `.agent/adventures/{ADV-ID}/reviews/adventure-report.md`"
+
+**Note on report files:** The `adventure-reviewer` agent (spawned here) writes a task-synthesis report to `reviews/adventure-report.md`. The `adventure-reporter` agent (spawned by the SubagentStop hook after all tasks complete) writes terminal-state reports to `report-en.md` and `report-ru.md`. These are distinct outputs from different agents.
 
 **Error Handling:** If the `adventure-reviewer` agent fails (crash, timeout, or the report file is absent after completion):
 - Append to adventure.log: `[{timestamp}] adventure-review | "adventure reviewer failed: {error}"`
@@ -119,11 +121,11 @@ If the report file was created, report: "Adventure report generated at `.agent/a
 
 ### 5. Present Knowledge Extraction Suggestions
 
-Read `.agent/adventures/{ADV-ID}/adventure-report.md`.
+Read `.agent/adventures/{ADV-ID}/reviews/adventure-report.md`.
 
 Parse Section 6 ("Knowledge Extraction Suggestions") to extract the suggestion table and individual suggestion blocks. For each suggestion, extract: index number, type (pattern/issue/decision/feedback/process), target file, title, and content.
 
-If `adventure-report.md` exists but has no Section 6 or no suggestions are found, report: "No knowledge extraction suggestions found in the adventure report." and skip to Step 7.
+If `reviews/adventure-report.md` exists but has no Section 6 or no suggestions are found, report: "No knowledge extraction suggestions found in the adventure report." and skip to Step 7.
 
 Present suggestions to the user grouped by type:
 
@@ -165,7 +167,7 @@ Parse the user's selection into a list of approved suggestion indices. If the us
 Filter out process-type suggestions from the auto-apply set (they are informational only; note them separately).
 
 Spawn the `knowledge-extractor` agent with prompt:
-"Apply knowledge suggestions from adventure {ADV-ID}. Read the adventure report at `.agent/adventures/{ADV-ID}/adventure-report.md`, Section 6. Apply suggestions with indices: {comma-separated list of approved indices}. Deduplicate against existing knowledge base files."
+"Apply knowledge suggestions from adventure {ADV-ID}. Read the adventure report at `.agent/adventures/{ADV-ID}/reviews/adventure-report.md`, Section 6. Apply suggestions with indices: {comma-separated list of approved indices}. Deduplicate against existing knowledge base files."
 
 Wait for completion. Report: "{N} suggestions applied to knowledge base."
 
