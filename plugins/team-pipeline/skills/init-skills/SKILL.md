@@ -78,8 +78,15 @@ If `.agent/roles/` does not exist or is empty, skip this step (MISSING category 
 Use Glob to find all `skills/*/SKILL.md` files in installed plugin directories.
 
 For each found skill:
-- Read the SKILL.md frontmatter `name` field.
-- Add to the available-skills inventory.
+- Read the SKILL.md frontmatter fields:
+  - `name` (required)
+  - `description` (required)
+  - `context` (optional, default: "inline")
+  - `agent` (optional)
+  - `model` (optional)
+  - `allowed-tools` (optional)
+  - `disable-model-invocation` (optional)
+- Add to the available-skills inventory with all parsed fields.
 
 ### 5. Match and Categorize
 
@@ -115,13 +122,22 @@ MISSING (referenced by roles but not installed):
 RECOMMENDED (matching skill available):
   [x] {skill-name}     {technology} detected, from: {plugin}
                         (satisfies: {role-skill-name})
+                        context: {context}  agent: {agent}  model: {model}
 
 OPTIONAL (technology detected, no matching skill):
   [ ] {suggested-name}  {technology} detected (stub available)
 
 AVAILABLE (installed but not referenced):
   [ ] {skill-name}     from: {plugin}
+                        context: {context}  agent: {agent}  model: {model}
+
+COMPOSITE (multi-agent workflow skills, context: fork):
+  [ ] {skill-name}     {description}
+                        agent: {agent}  model: {model}
+                        tools: {allowed-tools list}
 ```
+
+Show metadata lines only when the relevant fields are set (omit blank `agent: ` or `model: ` entries). The COMPOSITE category is shown only if composite skills (`context: fork`) exist in the inventory.
 
 ### 7. User Selection
 

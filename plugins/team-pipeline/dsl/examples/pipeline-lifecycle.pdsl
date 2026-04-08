@@ -1,0 +1,206 @@
+// pipeline-lifecycle.pdsl
+// Describes all six lifecycle roles in the team-pipeline agent system.
+// Each lifecycle block covers: role, model, trigger, input, execute,
+// transitions, and completion phases.
+
+lifecycle PlanningCycle {
+  role: planner
+  model: opus
+  trigger: task.status == "pending" && task.stage == "planning"
+
+  input {
+    read .agent/tasks/task.md
+    read .agent/config.md
+    read .agent/knowledge/notes.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/designs/design.md
+    update task.files
+    update task.status -> "ready"
+  }
+
+  transitions {
+    on success -> implementing
+    on blocked_on_question -> wait
+    on error -> wait
+  }
+
+  completion {
+    emit task.planned
+    log "{timestamp} planner: design complete"
+  }
+}
+
+lifecycle ImplementingCycle {
+  role: implementer
+  model: sonnet
+  trigger: task.status == "ready" && task.stage == "implementing"
+
+  input {
+    read .agent/tasks/task.md
+    read .agent/designs/design.md
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    update task.files
+    update task.status -> "ready"
+  }
+
+  transitions {
+    on success -> reviewing
+    on needs_fixes -> fixing
+    on error -> wait
+  }
+
+  completion {
+    emit task.implemented
+    log "{timestamp} implementer: implementation complete"
+  }
+}
+
+lifecycle ReviewingCycle {
+  role: reviewer
+  model: sonnet
+  trigger: task.status == "ready" && task.stage == "reviewing"
+
+  input {
+    read .agent/tasks/task.md
+    read .agent/designs/design.md
+    read .agent/reports/review.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/reports/review.md
+    update task.status -> "ready"
+  }
+
+  transitions {
+    on passed -> completed
+    on failed -> fixing
+  }
+
+  completion {
+    emit task.reviewed
+    log "{timestamp} reviewer: review complete"
+  }
+}
+
+lifecycle FixingCycle {
+  role: implementer
+  model: sonnet
+  trigger: task.status == "failed" && task.stage == "fixing"
+
+  input {
+    read .agent/tasks/task.md
+    read .agent/reports/review.md
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    update task.files
+    update task.status -> "ready"
+  }
+
+  transitions {
+    on success -> reviewing
+    on error -> wait
+  }
+
+  completion {
+    emit task.fixed
+    log "{timestamp} implementer: fixes applied"
+  }
+}
+
+lifecycle ResearchingCycle {
+  role: researcher
+  model: opus
+  trigger: task.status == "ready" && task.stage == "researching"
+
+  input {
+    read .agent/tasks/task.md
+    read .agent/designs/design.md
+    read .agent/reports/review.md
+  }
+
+  execute {
+    read .agent/knowledge/notes.md
+    write .agent/knowledge/summary.md
+    update task.status -> "completed"
+  }
+
+  transitions {
+    on success -> completed
+  }
+
+  completion {
+    emit task.researched
+    log "{timestamp} researcher: knowledge updated"
+  }
+}
+
+lifecycle AdventurePlanningCycle {
+  role: adventure-planner
+  model: opus
+  trigger: adventure.state == "concept" && adventure.approved == true
+
+  input {
+    read .agent/adventures/{adventure.id}/manifest.md
+    read .agent/config.md
+    read .agent/knowledge/notes.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{adventure.id}/designs/design-{slug}.md
+    write .agent/adventures/{adventure.id}/plans/plan-{slug}.md
+    write .agent/adventures/{adventure.id}/schemas/entities.md
+    write .agent/adventures/{adventure.id}/permissions.md
+    write .agent/adventures/{adventure.id}/roles/implementer.md
+    write .agent/adventures/{adventure.id}/roles/reviewer.md
+    update adventure.state -> "review"
+  }
+
+  transitions {
+    on success -> review
+    on blocked_on_question -> wait
+  }
+
+  completion {
+    emit adventure.planned
+    log "{timestamp} adventure-planner | complete: adventure plan ready"
+  }
+}
+
+lifecycle AdventureReportingCycle {
+  role: adventure-reporter
+  model: sonnet
+  trigger: adventure.state == "completed" || adventure.state == "cancelled" || adventure.state == "blocked"
+
+  input {
+    read .agent/adventures/{adventure.id}/manifest.md
+    read .agent/adventures/{adventure.id}/adventure.log
+    read .agent/adventures/{adventure.id}/metrics.md
+    read .agent/adventures/{adventure.id}/tasks/
+  }
+
+  execute {
+    write .agent/adventures/{adventure.id}/report-en.md
+    write .agent/adventures/{adventure.id}/report-ru.md
+  }
+
+  transitions {
+    on success -> completed
+  }
+
+  completion {
+    emit adventure.reported
+    log "{timestamp} adventure-reporter | complete: reports generated"
+  }
+}

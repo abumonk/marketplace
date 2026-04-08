@@ -1,5 +1,5 @@
 ---
-pipeline_version: "0.10.0"
+pipeline_version: "0.13.0"
 
 directories:
   - tasks
@@ -19,6 +19,7 @@ directories:
   - agent-memory/reviewer
   - agent-memory/researcher
   - rules
+  - step2step
 
 files:
   config.md:
@@ -74,8 +75,21 @@ files:
         avg_stage_duration_mins: { default: 0 }
       mode: { default: "semi-auto" }
       max_parallel: { default: 3 }
-      active_agents: { default: [] }
-      queue: { default: [] }
+      active_agents:
+        type: array
+        default: []
+        items:
+          task_id: string     # e.g. "TASK-001" or "ADV015-T001"
+          role: string        # agent role name
+          model: string       # model used (sonnet, opus, haiku)
+          started_at: string  # ISO 8601 timestamp
+      queue:
+        type: array
+        default: []
+        items:
+          task_id: string     # task to be processed
+          stage: string       # target pipeline stage
+          priority: number    # optional, for ordering (lower = higher priority)
       last_event: { default: null }
       paused: { default: false }
     body_template: |
@@ -232,6 +246,30 @@ files:
             mode: advisory
             description: "Check if adventure is complete when an adventure task finishes"
             enabled: true
+          - id: adventure-review-trigger
+            event: TaskCompleted
+            matcher:
+              tags: [adventure]
+            action: notify
+            mode: advisory
+            description: "When all adventure tasks are completed, suggest running /adventure-review {ADV-ID}"
+            enabled: true
+          - id: roadmap-task-completed
+            event: TaskCompleted
+            matcher:
+              roles: ["*"]
+            action: log
+            mode: always
+            description: "Update roadmap on task completion"
+            enabled: true
+          - id: roadmap-session-update
+            event: SubagentStop
+            matcher:
+              roles: ["lead"]
+            action: log
+            mode: advisory
+            description: "Remind lead to update roadmap session notes on significant events"
+            enabled: true
     body_template: |
       # Hook Configuration
 
@@ -260,6 +298,43 @@ files:
       | StageTransition | Stage advancement | Real-time by lead |
       | TaskCompleted | Task finalized | Real-time by lead |
       | InstructionsLoaded | Agent prompt assembly | Real-time by lead |
+
+  roadmap.md:
+    type: frontmatter
+    required_fields:
+      version: { default: 1 }
+      last_updated: { default: null }
+      last_session_read: { default: null }
+      projects:
+        type: array
+        default: []
+        items:
+          id: string              # e.g. "team-pipeline"
+          path: string            # e.g. "projects/team-pipeline"
+          status: string          # active | paused | archived
+          current_adventure: string  # adventure ID or null
+          completed_adventures: number
+          open_tasks: number
+          health: string          # green | yellow | red (derived)
+      ecosystem_stats:
+        total_adventures: { default: 0 }
+        completed_adventures: { default: 0 }
+        total_tasks: { default: 0 }
+        completed_tasks: { default: 0 }
+        total_tcs: { default: 0 }
+        passed_tcs: { default: 0 }
+    body_template: |
+      # Project Roadmap
+
+      ## Ecosystem Overview
+
+      ## Projects
+
+      ## Strategic Goals
+
+      ## Dependency Map
+
+      ## Session Notes
 
   agent-memory/lead/MEMORY.md:
     type: template

@@ -51,3 +51,24 @@ Format: `### {Decision Title}\n- **Context**: ...\n- **Decision**: ...\n- **From
 - Deduplicate: do not add entries that duplicate existing knowledge
 - Be concise -- each entry should be 1-2 sentences
 - If a task completed with zero iterations and no issues, skip the update (nothing to learn)
+
+## Persistent Agent Memory
+
+You have a persistent memory directory at `.agent/agent-memory/researcher/`. Its contents persist across conversations.
+
+As you work, consult your memory files to build on previous experience. When you notice cross-task patterns or knowledge base quality issues, check your memory — and if nothing is written yet, record what you learned.
+
+Guidelines:
+- `MEMORY.md` is always loaded into your prompt — lines after 200 will be truncated, so keep it concise
+- Create separate topic files (e.g., `cross-task-patterns.md`, `architecture-evolution.md`) for detailed notes and link to them from MEMORY.md
+- Update or remove memories that turn out to be wrong or outdated
+
+What to save:
+- Cross-task patterns that recur across multiple tasks
+- Architecture evolution observations (how the codebase changes over time)
+- Knowledge base quality observations (gaps, duplicates, stale entries)
+- Estimation variance data and suggested multipliers for future adventures
+
+What NOT to save:
+- Individual task findings (these go in shared `.agent/knowledge/`)
+- Speculative patterns observed only in a single task

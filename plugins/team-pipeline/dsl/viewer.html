@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDSL Viewer / Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      height: 100vh;
+    }
+
+    #left-pane {
+      width: 40%;
+      display: flex;
+      flex-direction: column;
+      background: #181825;
+      border-right: 1px solid #313244;
+    }
+
+    #pane-header {
+      background: #313244;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #89b4fa;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    #pane-header span { color: #a6e3a1; }
+
+    #error-panel {
+      color: #f38ba8;
+      font-size: 11px;
+      font-family: monospace;
+      padding: 4px 8px;
+      background: #2a1520;
+      min-height: 0;
+      white-space: pre-wrap;
+      border-bottom: 1px solid #313244;
+      flex-shrink: 0;
+    }
+
+    #error-panel:empty {
+      display: none;
+    }
+
+    #source {
+      flex: 1;
+      resize: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      padding: 12px;
+      background: #181825;
+      color: #cdd6f4;
+      border: none;
+      outline: none;
+      line-height: 1.5;
+    }
+
+    #divider {
+      width: 5px;
+      background: #313244;
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.1s;
+    }
+
+    #divider:hover, #divider.dragging {
+      background: #89b4fa;
+    }
+
+    #right-pane {
+      flex: 1;
+      overflow: auto;
+      background: #1e1e2e;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #right-header {
+      background: #313244;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #89b4fa;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    #svg-container {
+      flex: 1;
+      padding: 20px;
+      overflow: auto;
+    }
+
+    #svg-container svg {
+      display: block;
+    }
+
+    #context-menu {
+      display: none;
+      position: fixed;
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      z-index: 1000;
+      min-width: 140px;
+      overflow: hidden;
+    }
+
+    .context-menu-item {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #cdd6f4;
+    }
+
+    .context-menu-item:hover {
+      background: #45475a;
+      color: #89b4fa;
+    }
+
+    /* SVG entity interaction cursors (applied via JS) */
+    [data-entity] { cursor: default; }
+    [data-entity-header] { cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="left-pane">
+    <div id="pane-header">PDSL Source <span>&#x270E; editable</span></div>
+    <div id="error-panel"></div>
+    <textarea id="source" spellcheck="false" autocomplete="off"></textarea>
+  </div>
+  <div id="divider"></div>
+  <div id="right-pane">
+    <div id="right-header">Diagram &mdash; double-click entity to rename &bull; right-click to add field</div>
+    <div id="svg-container"></div>
+  </div>
+</div>
+
+<div id="context-menu"></div>
+
+<!-- ============================================================
+     MODULE 1: window.PDSL namespace + ast.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  window.PDSL = {};
+
+  // ---- TokenType enum ----
+  var TokenType = Object.freeze({
+    LIFECYCLE: 'lifecycle', STRUCTURE: 'structure', ENTITY: 'entity',
+    RELATION: 'relation', INPUT: 'input', EXECUTE: 'execute',
+    TRANSITIONS: 'transitions', COMPLETION: 'completion', CONTAINS: 'contains',
+    SPAWNS: 'spawns', DELEGATES: 'delegates', CHECKPOINTS: 'checkpoints',
+    ON: 'on', FROM: 'from', TYPE: 'type', VIA: 'via', CARDINALITY: 'cardinality',
+    CONSTRAINT: 'constraint', VALUES: 'values', ROLE: 'role', MODEL: 'model',
+    TRIGGER: 'trigger', STATE: 'state', ID: 'id',
+    IDENTIFIER: 'IDENTIFIER', STRING: 'STRING', NUMBER: 'NUMBER', PATTERN: 'PATTERN',
+    ARROW: 'ARROW', DOT_DOT: 'DOT_DOT', COMP_EQ: 'COMP_EQ', COMP_NE: 'COMP_NE',
+    COMP_LE: 'COMP_LE', COMP_GE: 'COMP_GE', COMP_LT: 'COMP_LT', COMP_GT: 'COMP_GT',
+    LOGIC_AND: 'LOGIC_AND', LOGIC_OR: 'LOGIC_OR', EQUALS: 'EQUALS', COLON: 'COLON',
+    PIPE: 'PIPE', QUESTION: 'QUESTION', DOT: 'DOT', STAR: 'STAR',
+    LBRACE: 'LBRACE', RBRACE: 'RBRACE', LBRACKET: 'LBRACKET', RBRACKET: 'RBRACKET',
+    LPAREN: 'LPAREN', RPAREN: 'RPAREN', COMMA: 'COMMA', SLASH: 'SLASH',
+    EOF: 'EOF', ERROR: 'ERROR',
+  });
+
+  var KEYWORDS = new Set([
+    'lifecycle','structure','entity','relation','input','execute','transitions',
+    'completion','contains','spawns','delegates','checkpoints','on','from','type',
+    'via','cardinality','constraint','values','role','model','trigger','state','id',
+  ]);
+
+  function createToken(type, value, line, column) { return { type, value, line, column }; }
+
+  function loc(startToken, endToken) {
+    var endValue = endToken.value != null ? String(endToken.value) : '';
+    return { line: startToken.line, column: startToken.column,
+             endLine: endToken.line, endColumn: endToken.column + endValue.length };
+  }
+
+  function Program(body, comments, srcLoc) { return { type: 'Program', body, comments, loc: srcLoc }; }
+  function LifecycleDecl(name, props, srcLoc) { return Object.assign({ type: 'Lifecycle', name, loc: srcLoc }, props); }
+  function StructureDecl(name, props, srcLoc) { return Object.assign({ type: 'Structure', name, loc: srcLoc }, props); }
+  function EntityDecl(name, fields, srcLoc) { return { type: 'Entity', name, fields, loc: srcLoc }; }
+  function RelationDecl(source, target, props, srcLoc) { return Object.assign({ type: 'Relation', source, target, loc: srcLoc }, props); }
+  function FieldDecl(name, props, srcLoc) {
+    return { type: 'Field', name,
+      fieldType: props.fieldType, optional: props.optional || false,
+      default: props.defaultValue, pattern: props.pattern,
+      cardinality: props.cardinality, loc: srcLoc };
+  }
+  function TransitionRule(on, target, srcLoc) { return { type: 'Transition', on, target, loc: srcLoc }; }
+  function ActionStep(verb, operands, srcLoc) { return { type: 'Action', verb, operands, loc: srcLoc }; }
+  function ContainmentEntry(path, targetType, cardinality, srcLoc) { return { type: 'Containment', path, targetType, cardinality, loc: srcLoc }; }
+  function SpawnEntry(targetType, cardinality, source, srcLoc) { return { type: 'Spawn', targetType, cardinality, source, loc: srcLoc }; }
+  function DelegationEntry(stage, role, srcLoc) { return { type: 'Delegation', stage, role, loc: srcLoc }; }
+  function CheckpointEntry(fromState, toState, condition, srcLoc) { return { type: 'Checkpoint', fromState, toState, condition, loc: srcLoc }; }
+  function PatternLiteral(regex, srcLoc) { return { type: 'Pattern', regex, loc: srcLoc }; }
+  function EnumType(values, srcLoc) { return { type: 'Enum', values, loc: srcLoc }; }
+  function TypeExpression(kind, name, enumValues, srcLoc) { return { type: 'TypeExpression', kind, name, enumValues, loc: srcLoc }; }
+  function Cardinality(min, max, notation, srcLoc) { return { type: 'Cardinality', min, max, notation, loc: srcLoc }; }
+  function BinaryExpression(operator, left, right, srcLoc) { return { type: 'BinaryExpression', operator, left, right, loc: srcLoc }; }
+  function LogicalExpression(operator, left, right, srcLoc) { return { type: 'LogicalExpression', operator, left, right, loc: srcLoc }; }
+  function FieldRef(segments, srcLoc) { return { type: 'FieldRef', segments, loc: srcLoc }; }
+  function Literal(kind, value, srcLoc) { return { type: 'Literal', kind, value, loc: srcLoc }; }
+
+  window.PDSL.ast = {
+    TokenType, KEYWORDS, createToken, loc,
+    Program, LifecycleDecl, StructureDecl, EntityDecl, RelationDecl, FieldDecl,
+    TransitionRule, ActionStep, ContainmentEntry, SpawnEntry, DelegationEntry,
+    CheckpointEntry, PatternLiteral, EnumType, TypeExpression, Cardinality,
+    BinaryExpression, LogicalExpression, FieldRef, Literal,
+  };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 2: parser.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var _ast = window.PDSL.ast;
+  var TokenType = _ast.TokenType;
+  var KEYWORDS = _ast.KEYWORDS;
+  var createToken = _ast.createToken;
+  var Program = _ast.Program;
+  var LifecycleDecl = _ast.LifecycleDecl;
+  var StructureDecl = _ast.StructureDecl;
+  var EntityDecl = _ast.EntityDecl;
+  var RelationDecl = _ast.RelationDecl;
+  var FieldDecl = _ast.FieldDecl;
+  var PatternLiteral = _ast.PatternLiteral;
+  var EnumType = _ast.EnumType;
+  var TypeExpression = _ast.TypeExpression;
+  var Cardinality = _ast.Cardinality;
+  var Literal = _ast.Literal;
+  var TransitionRule = _ast.TransitionRule;
+  var ActionStep = _ast.ActionStep;
+  var ContainmentEntry = _ast.ContainmentEntry;
+  var SpawnEntry = _ast.SpawnEntry;
+  var DelegationEntry = _ast.DelegationEntry;
+  var CheckpointEntry = _ast.CheckpointEntry;
+  var BinaryExpression = _ast.BinaryExpression;
+  var LogicalExpression = _ast.LogicalExpression;
+  var FieldRef = _ast.FieldRef;
+  var loc = _ast.loc;
+
+  function isIdentStart(ch) { return (ch>='a'&&ch<='z')||(ch>='A'&&ch<='Z')||ch==='_'; }
+  function isIdentContinue(ch) { return isIdentStart(ch)||(ch>='0'&&ch<='9')||ch==='-'; }
+  function isDigit(ch) { return ch>='0'&&ch<='9'; }
+
+  function tokenize(source) {
+    var tokens = [], pos = 0, line = 1, column = 1, len = source.length;
+    function peek(offset) { return source[pos + (offset||0)]; }
+    function advance() {
+      var ch = source[pos]; pos++;
+      if (ch==='\n') { line++; column=1; } else { column++; }
+      return ch;
+    }
+    function advanceBy(n) { for(var i=0;i<n;i++) advance(); }
+    function emit(type, value, sl, sc) { tokens.push(createToken(type,value,sl,sc)); }
+    var prevWasSpace = true;
+    while (pos < len) {
+      var startLine=line, startCol=column, ch=source[pos];
+      if (ch===' '||ch==='\t'||ch==='\r'||ch==='\n') {
+        prevWasSpace=true;
+        if(ch==='\r'&&peek(1)==='\n'){pos++;column++;}
+        advance(); continue;
+      }
+      var wasPrecededBySpace=prevWasSpace;
+      prevWasSpace=false;
+      if(ch==='/'&&peek(1)==='/'){while(pos<len&&source[pos]!=='\n'){pos++;column++;}continue;}
+      if(ch==='/'&&peek(1)==='*'){
+        var errLine=startLine,errCol=startCol;
+        pos+=2;column+=2;var closed=false;
+        while(pos<len){if(source[pos]==='*'&&source[pos+1]==='/'){pos+=2;column+=2;closed=true;break;}advance();}
+        if(!closed)emit(TokenType.ERROR,'/* (unterminated)',errLine,errCol);
+        continue;
+      }
+      if(ch==='"'){
+        pos++;column++;var str='',terminated=false;
+        while(pos<len){var c=source[pos];if(c==='"'){pos++;column++;terminated=true;break;}str+=c;advance();}
+        emit(terminated?TokenType.STRING:TokenType.ERROR, terminated?str:'"'+str+' (unterminated)',startLine,startCol);
+        continue;
+      }
+      if(ch==='/'){
+        var nextCh=peek(1);
+        var isPatternStart=wasPrecededBySpace&&nextCh!==undefined&&nextCh!==' '&&nextCh!=='\t'&&nextCh!=='\r'&&nextCh!=='\n'&&nextCh!=='/';
+        if(isPatternStart){
+          var scanPos=pos+1,found=false;
+          while(scanPos<len&&source[scanPos]!=='\n'){if(source[scanPos]==='/'){found=true;break;}scanPos++;}
+          if(found){
+            pos++;column++;var body='';
+            while(pos<len&&source[pos]!=='/'&&source[pos]!=='\n'){body+=source[pos];advance();}
+            if(pos<len&&source[pos]==='/'){pos++;column++;emit(TokenType.PATTERN,body,startLine,startCol);}
+            else{emit(TokenType.ERROR,'/'+body+' (unterminated)',startLine,startCol);}
+            continue;
+          }
+          pos++;column++;var errBody='';
+          while(pos<len&&source[pos]!=='\n'){errBody+=source[pos];advance();}
+          emit(TokenType.ERROR,'/'+errBody+' (unterminated)',startLine,startCol);
+          continue;
+        }
+        pos++;column++;emit(TokenType.SLASH,'/',startLine,startCol);continue;
+      }
+      if(isDigit(ch)){
+        var num='';
+        while(pos<len&&isDigit(source[pos])){num+=source[pos];advance();}
+        emit(TokenType.NUMBER,num,startLine,startCol);continue;
+      }
+      if(isIdentStart(ch)){
+        var word='';
+        while(pos<len&&isIdentContinue(source[pos])){word+=source[pos];advance();}
+        emit(KEYWORDS.has(word)?word:TokenType.IDENTIFIER,word,startLine,startCol);continue;
+      }
+      var ch2=ch+(peek(1)||'');
+      if(ch2==='->')  {advanceBy(2);emit(TokenType.ARROW,    '->',startLine,startCol);continue;}
+      if(ch2==='..') {advanceBy(2);emit(TokenType.DOT_DOT,  '..',startLine,startCol);continue;}
+      if(ch2==='==') {advanceBy(2);emit(TokenType.COMP_EQ,  '==',startLine,startCol);continue;}
+      if(ch2==='!=') {advanceBy(2);emit(TokenType.COMP_NE,  '!=',startLine,startCol);continue;}
+      if(ch2==='<=') {advanceBy(2);emit(TokenType.COMP_LE,  '<=',startLine,startCol);continue;}
+      if(ch2==='>=') {advanceBy(2);emit(TokenType.COMP_GE,  '>=',startLine,startCol);continue;}
+      if(ch2==='&&') {advanceBy(2);emit(TokenType.LOGIC_AND,'&&',startLine,startCol);continue;}
+      if(ch2==='||') {advanceBy(2);emit(TokenType.LOGIC_OR, '||',startLine,startCol);continue;}
+      switch(ch){
+        case '=':advance();emit(TokenType.EQUALS,  '=',startLine,startCol);break;
+        case ':':advance();emit(TokenType.COLON,   ':',startLine,startCol);break;
+        case '|':advance();emit(TokenType.PIPE,    '|',startLine,startCol);break;
+        case '?':advance();emit(TokenType.QUESTION,'?',startLine,startCol);break;
+        case '.':advance();emit(TokenType.DOT,     '.',startLine,startCol);break;
+        case '*':advance();emit(TokenType.STAR,    '*',startLine,startCol);break;
+        case '<':advance();emit(TokenType.COMP_LT, '<',startLine,startCol);break;
+        case '>':advance();emit(TokenType.COMP_GT, '>',startLine,startCol);break;
+        case '{':advance();emit(TokenType.LBRACE,  '{',startLine,startCol);break;
+        case '}':advance();emit(TokenType.RBRACE,  '}',startLine,startCol);break;
+        case '[':advance();emit(TokenType.LBRACKET,'[',startLine,startCol);break;
+        case ']':advance();emit(TokenType.RBRACKET,']',startLine,startCol);break;
+        case '(':advance();emit(TokenType.LPAREN,  '(',startLine,startCol);break;
+        case ')':advance();emit(TokenType.RPAREN,  ')',startLine,startCol);break;
+        case ',':advance();emit(TokenType.COMMA,   ',',startLine,startCol);break;
+        default: advance();emit(TokenType.ERROR,ch,startLine,startCol);break;
+      }
+    }
+    emit(TokenType.EOF,'',line,column);
+    return tokens;
+  }
+
+  var KNOWN_VERBS = new Set(['read','write','update','explore','emit','log']);
+
+  function Parser(tokens) { this.tokens=tokens; this.pos=0; this.errors=[]; }
+
+  Parser.prototype.peek = function() { return this.tokens[this.pos]; };
+  Parser.prototype.advance = function() {
+    var tok=this.tokens[this.pos];
+    if(tok.type!==TokenType.EOF) this.pos++;
+    return tok;
+  };
+  Parser.prototype.check = function(type) { return this.peek().type===type; };
+  Parser.prototype.expect = function(type) {
+    var tok=this.peek();
+    if(tok.type===type) return this.advance();
+    this.errors.push({message:"Expected '"+type+"' but got '"+tok.type+"' ('"+tok.value+"')",line:tok.line,column:tok.column});
+    return {type,value:'',line:tok.line,column:tok.column};
+  };
+  Parser.prototype.match = function(type) { if(this.check(type)){this.advance();return true;}return false; };
+
+  Parser.prototype.parseProgram = function() {
+    var firstTok=this.peek(),body=[];
+    while(!this.check(TokenType.EOF)){
+      if(this.check(TokenType.LIFECYCLE)) body.push(this.parseLifecycle());
+      else if(this.check(TokenType.ENTITY)) body.push(this.parseEntityDecl());
+      else if(this.check(TokenType.RELATION)){var d=this.parseRelationDecl();if(d)body.push(d);}
+      else if(this.check(TokenType.STRUCTURE)) body.push(this.parseStructure());
+      else{var tok=this.peek();this.errors.push({message:"Unexpected token '"+tok.type+"' at top level",line:tok.line,column:tok.column});this.advance();}
+    }
+    var lastTok=this.tokens[this.pos];
+    return Program(body,[],loc(firstTok,lastTok));
+  };
+
+  Parser.prototype.parseLifecycle = function() {
+    var start=this.expect(TokenType.LIFECYCLE);
+    var nameToken=this.expect(TokenType.IDENTIFIER);
+    this.expect(TokenType.LBRACE);
+    var props={role:null,model:null,trigger:null,input:[],execute:[],transitions:[],completion:[]};
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      if(this.check(TokenType.ROLE)) this.parseLifecycleField(props,'role');
+      else if(this.check(TokenType.MODEL)) this.parseLifecycleField(props,'model');
+      else if(this.check(TokenType.TRIGGER)) this.parseLifecycleTrigger(props);
+      else if(this.check(TokenType.INPUT)) props.input=this.parseActionBlock();
+      else if(this.check(TokenType.EXECUTE)) props.execute=this.parseActionBlock();
+      else if(this.check(TokenType.COMPLETION)) props.completion=this.parseActionBlock();
+      else if(this.check(TokenType.TRANSITIONS)) props.transitions=this.parseTransitionsBlock();
+      else{var tok=this.peek();this.errors.push({message:"Unexpected '"+tok.value+"' in lifecycle",line:tok.line,column:tok.column});this.advance();}
+    }
+    var end=this.expect(TokenType.RBRACE);
+    return LifecycleDecl(nameToken.value,props,loc(start,end));
+  };
+  Parser.prototype.parseLifecycleField = function(props,field) {
+    this.advance();this.expect(TokenType.COLON);props[field]=this.expect(TokenType.IDENTIFIER).value;
+  };
+  Parser.prototype.parseLifecycleTrigger = function(props) {
+    this.advance();this.expect(TokenType.COLON);props.trigger=this.parseExpression();
+  };
+  Parser.prototype.parseActionBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var steps=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)) steps.push(this.parseActionStep());
+    this.expect(TokenType.RBRACE);return steps;
+  };
+  Parser.prototype.parseActionStep = function() {
+    var start=this.peek(),verbTok=this.advance(),verb=verbTok.value,operands=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      if(this.check(TokenType.IDENTIFIER)&&KNOWN_VERBS.has(this.peek().value)&&operands.length>0) break;
+      if(this.isBlockKeyword()) break;
+      operands.push(this.parseOperand());
+    }
+    var endPos=this.pos>0?this.pos-1:0;
+    return ActionStep(verb,operands,loc(start,this.tokens[endPos]));
+  };
+  Parser.prototype.isTopLevelKeyword = function() {
+    var t=this.peek().type;
+    return t===TokenType.ENTITY||t===TokenType.RELATION||t===TokenType.LIFECYCLE||t===TokenType.STRUCTURE;
+  };
+  Parser.prototype.isBlockKeyword = function() {
+    var t=this.peek().type;
+    return t===TokenType.INPUT||t===TokenType.EXECUTE||t===TokenType.COMPLETION||
+           t===TokenType.TRANSITIONS||t===TokenType.ROLE||t===TokenType.MODEL||t===TokenType.TRIGGER;
+  };
+  Parser.prototype.parseOperand = function() {
+    var start=this.peek();
+    if(this.check(TokenType.STRING)){var tok=this.advance();return Literal('string',tok.value,loc(tok,tok));}
+    if(this.check(TokenType.DOT)) return this.parseDotPath();
+    if(this.check(TokenType.IDENTIFIER)) return this.parseIdentOrFieldRefOrPath();
+    if(this.check(TokenType.STAR)){var tok2=this.advance();return Literal('path','*',loc(tok2,tok2));}
+    var tok3=this.advance();this.errors.push({message:"Unexpected '"+tok3.value+"' in operand",line:tok3.line,column:tok3.column});
+    return Literal('error',tok3.value,loc(tok3,tok3));
+  };
+  Parser.prototype.parseDotPath = function() {
+    var start=this.peek(),path='.';this.advance();
+    if(this.check(TokenType.IDENTIFIER)) path+=this.advance().value;
+    path=this.consumePathSegments(path,start);
+    return Literal('path',path,loc(start,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseIdentOrFieldRefOrPath = function() {
+    var start=this.peek(),firstIdent=this.advance(),accum=firstIdent.value;
+    if(this.check(TokenType.SLASH)){accum=this.consumePathSegments(accum,start);return Literal('path',accum,loc(start,this.tokens[this.pos-1]));}
+    var segments=[firstIdent.value];
+    while(this.check(TokenType.DOT)){
+      this.advance();
+      if(this.check(TokenType.IDENTIFIER)){segments.push(this.advance().value);}
+      else{accum=segments.join('.')+'.';if(this.check(TokenType.IDENTIFIER))accum+=this.advance().value;
+        if(this.check(TokenType.SLASH)){accum=this.consumePathSegments(accum,start);return Literal('path',accum,loc(start,this.tokens[this.pos-1]));}
+        return Literal('path',accum,loc(start,this.tokens[this.pos-1]));}
+      if(this.check(TokenType.SLASH)){accum=this.consumePathSegments(segments.join('.'),start);return Literal('path',accum,loc(start,this.tokens[this.pos-1]));}
+    }
+    if(segments.length>1){
+      var assignment=null;
+      if(this.check(TokenType.ARROW)){this.advance();if(this.check(TokenType.STRING))assignment=this.advance().value;}
+      var ref=FieldRef(segments,loc(start,this.tokens[this.pos-1]));
+      if(assignment!==null)ref.assignment=assignment;
+      return ref;
+    }
+    return FieldRef([firstIdent.value],loc(start,firstIdent));
+  };
+  Parser.prototype.consumePathSegments = function(initial,startTok) {
+    var path=initial;
+    while(this.check(TokenType.SLASH)){
+      this.advance();path+='/';
+      if(this.check(TokenType.LBRACE)){
+        this.advance();path+='{';
+        if(this.check(TokenType.IDENTIFIER))path+=this.advance().value;
+        while(this.check(TokenType.DOT)){this.advance();path+='.';if(this.check(TokenType.IDENTIFIER))path+=this.advance().value;}
+        this.expect(TokenType.RBRACE);path+='}';
+        if(this.check(TokenType.DOT)){this.advance();path+='.';if(this.check(TokenType.IDENTIFIER))path+=this.advance().value;}
+      } else if(this.check(TokenType.STAR)){this.advance();path+='*';}
+      else if(this.check(TokenType.IDENTIFIER)){
+        path+=this.advance().value;
+        if(this.check(TokenType.DOT)){this.advance();path+='.';if(this.check(TokenType.IDENTIFIER))path+=this.advance().value;}
+      }
+    }
+    return path;
+  };
+  Parser.prototype.expectIdentifierOrKeyword = function() {
+    var tok=this.peek();
+    if(tok.type===TokenType.IDENTIFIER||KEYWORDS.has(tok.type)) return this.advance();
+    this.errors.push({message:"Expected identifier but got '"+tok.type+"'",line:tok.line,column:tok.column});
+    return null;
+  };
+  Parser.prototype.skipBlock = function() {
+    if(!this.check(TokenType.LBRACE)){
+      while(!this.check(TokenType.EOF)&&!this.check(TokenType.LBRACE)&&
+            !this.check(TokenType.LIFECYCLE)&&!this.check(TokenType.ENTITY)&&
+            !this.check(TokenType.RELATION)&&!this.check(TokenType.STRUCTURE)) this.advance();
+      if(!this.check(TokenType.LBRACE))return;
+    }
+    this.advance();var depth=1;
+    while(depth>0&&!this.check(TokenType.EOF)){
+      if(this.check(TokenType.LBRACE)){depth++;this.advance();}
+      else if(this.check(TokenType.RBRACE)){depth--;this.advance();}
+      else this.advance();
+    }
+  };
+  Parser.prototype.skipToEndOfBlock = function() {
+    var depth=0;
+    while(!this.check(TokenType.EOF)){
+      if(this.check(TokenType.LBRACE)){depth++;this.advance();}
+      else if(this.check(TokenType.RBRACE)){if(depth===0){this.advance();break;}depth--;this.advance();}
+      else this.advance();
+    }
+  };
+  Parser.prototype.parseTypeExpr = function() {
+    var startTok=this.peek(),first=this.expectIdentifierOrKeyword();
+    if(!first) return null;
+    if(this.check(TokenType.PIPE)){
+      var values=[first.value];
+      while(this.match(TokenType.PIPE)){var next=this.expectIdentifierOrKeyword();if(next)values.push(next.value);}
+      return TypeExpression('enum',null,values,loc(startTok,this.tokens[this.pos-1]));
+    }
+    return TypeExpression('reference',first.value,null,loc(startTok,first));
+  };
+  Parser.prototype.parseCardinality = function() {
+    var startTok=this.peek();if(!this.match(TokenType.LBRACKET))return null;
+    var minTok=this.expect(TokenType.NUMBER);
+    if(!minTok||!minTok.value){while(!this.check(TokenType.EOF)&&!this.check(TokenType.RBRACKET))this.advance();this.match(TokenType.RBRACKET);return null;}
+    var min=parseInt(minTok.value,10),max,notation;
+    if(this.match(TokenType.DOT_DOT)){
+      if(this.match(TokenType.STAR)){max=Infinity;notation=min+'..*';}
+      else{var maxTok=this.expect(TokenType.NUMBER);max=parseInt(maxTok.value,10);notation=min+'..'+max;}
+    } else{max=min;notation=''+min;}
+    this.expect(TokenType.RBRACKET);
+    return Cardinality(min,max,notation,loc(startTok,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseCardinalityNotation = function() {
+    var startTok=this.peek(),minTok=this.expect(TokenType.NUMBER);
+    if(!minTok||!minTok.value)return null;
+    var min=parseInt(minTok.value,10),max,notation;
+    if(this.match(TokenType.DOT_DOT)){
+      if(this.match(TokenType.STAR)){max=Infinity;notation=min+'..*';}
+      else{var maxTok=this.expect(TokenType.NUMBER);if(!maxTok||!maxTok.value)return null;max=parseInt(maxTok.value,10);notation=min+'..'+max;}
+    } else{max=min;notation=''+min;}
+    return Cardinality(min,max,notation,loc(startTok,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseViaRef = function() {
+    var nameTok=this.expectIdentifierOrKeyword();if(!nameTok)return null;
+    if(this.check(TokenType.LBRACKET)&&this.tokens[this.pos+1]&&this.tokens[this.pos+1].type===TokenType.RBRACKET){this.advance();this.advance();return{name:nameTok.value,array:true};}
+    return{name:nameTok.value,array:false};
+  };
+  Parser.prototype.parseDefaultValue = function() {
+    var tok=this.peek();
+    if(this.check(TokenType.STRING)){this.advance();return Literal('string',tok.value,loc(tok,tok));}
+    if(this.check(TokenType.NUMBER)){this.advance();return Literal('number',tok.value,loc(tok,tok));}
+    if(this.check(TokenType.IDENTIFIER)||KEYWORDS.has(tok.type)){this.advance();return Literal('identifier',tok.value,loc(tok,tok));}
+    return null;
+  };
+  Parser.prototype.parseEntityField = function() {
+    var startTok=this.peek(),nameTok=this.expectIdentifierOrKeyword();
+    if(!nameTok){var cl=startTok.line;while(!this.check(TokenType.EOF)&&!this.check(TokenType.RBRACE)&&this.peek().line===cl)this.advance();return null;}
+    if(!this.check(TokenType.COLON)){this.errors.push({message:"Expected ':' after '"+nameTok.value+"'",line:this.peek().line,column:this.peek().column});var cl2=nameTok.line;while(!this.check(TokenType.EOF)&&!this.check(TokenType.RBRACE)&&this.peek().line===cl2)this.advance();return null;}
+    this.advance();
+    var fieldType=this.parseTypeExpr(),pattern=null;
+    if(this.check(TokenType.PATTERN)){var patTok=this.advance();pattern=PatternLiteral(patTok.value,loc(patTok,patTok));}
+    var optional=this.match(TokenType.QUESTION),defaultValue=null;
+    if(this.match(TokenType.EQUALS))defaultValue=this.parseDefaultValue();
+    var cardinality=null;
+    if(this.check(TokenType.LBRACKET))cardinality=this.parseCardinality();
+    var endTok=this.tokens[this.pos-1];
+    return FieldDecl(nameTok.value,{fieldType,optional,defaultValue,pattern,cardinality},loc(startTok,endTok));
+  };
+  Parser.prototype.parseValuesField = function() {
+    var startTok=this.peek();this.advance();
+    if(!this.check(TokenType.COLON)){this.errors.push({message:"Expected ':' after 'values'",line:this.peek().line,column:this.peek().column});return null;}
+    this.advance();
+    var firstTok=this.peek(),first=this.expectIdentifierOrKeyword();if(!first)return null;
+    var values=[first.value];
+    while(this.match(TokenType.PIPE)){var next=this.expectIdentifierOrKeyword();if(next)values.push(next.value);}
+    var endTok=this.tokens[this.pos-1],fieldType=EnumType(values,loc(firstTok,endTok));
+    return FieldDecl('values',{fieldType,optional:false,defaultValue:null,pattern:null,cardinality:null},loc(startTok,endTok));
+  };
+  Parser.prototype.parseEntityDecl = function() {
+    var startTok=this.peek();this.advance();
+    var nameTok=this.expect(TokenType.IDENTIFIER);
+    if(!nameTok.value){this.skipBlock();return EntityDecl('(error)',[],loc(startTok,this.tokens[this.pos-1]));}
+    if(!this.check(TokenType.LBRACE)){this.errors.push({message:"Expected '{' after entity '"+nameTok.value+"'",line:this.peek().line,column:this.peek().column});this.skipToEndOfBlock();return EntityDecl(nameTok.value,[],loc(startTok,this.tokens[this.pos-1]));}
+    this.advance();
+    var fields=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)&&!this.isTopLevelKeyword()){
+      if(this.check(TokenType.VALUES)){var f=this.parseValuesField();if(f)fields.push(f);}
+      else{var f2=this.parseEntityField();if(f2)fields.push(f2);}
+    }
+    if(!this.match(TokenType.RBRACE)) this.errors.push({message:"Expected '}' to close entity '"+nameTok.value+"'",line:this.peek().line,column:this.peek().column});
+    return EntityDecl(nameTok.value,fields,loc(startTok,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseRelationDecl = function() {
+    var startTok=this.peek();this.advance();
+    var sourceTok=this.expect(TokenType.IDENTIFIER);if(!sourceTok.value){this.skipBlock();return null;}
+    if(!this.check(TokenType.ARROW)){this.errors.push({message:"Expected '->' in relation",line:this.peek().line,column:this.peek().column});this.skipBlock();return null;}
+    this.advance();
+    var targetTok=this.expect(TokenType.IDENTIFIER);if(!targetTok.value){this.skipBlock();return null;}
+    if(!this.check(TokenType.LBRACE)){this.errors.push({message:"Expected '{' in relation",line:this.peek().line,column:this.peek().column});this.skipToEndOfBlock();return RelationDecl(sourceTok.value,targetTok.value,{},loc(startTok,this.tokens[this.pos-1]));}
+    this.advance();
+    var fields={relationType:null,via:null,cardinality:null,constraints:[],lifecycle:null};
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      if(this.check(TokenType.TYPE)){this.advance();this.expect(TokenType.COLON);var v=this.expectIdentifierOrKeyword();if(v)fields.relationType=v.value;}
+      else if(this.check(TokenType.VIA)){this.advance();this.expect(TokenType.COLON);fields.via=this.parseViaRef();}
+      else if(this.check(TokenType.CARDINALITY)){this.advance();this.expect(TokenType.COLON);fields.cardinality=this.parseCardinalityNotation();}
+      else if(this.check(TokenType.CONSTRAINT)){this.advance();this.expect(TokenType.COLON);var v2=this.expectIdentifierOrKeyword();if(v2)fields.constraints.push(v2.value);}
+      else if(this.check(TokenType.LIFECYCLE)){this.advance();this.expect(TokenType.COLON);var v3=this.expectIdentifierOrKeyword();if(v3)fields.lifecycle=v3.value;}
+      else{var ft=this.peek();this.errors.push({message:"Unexpected '"+ft.value+"' in relation body",line:ft.line,column:ft.column});this.advance();}
+    }
+    if(!this.match(TokenType.RBRACE)) this.errors.push({message:"Expected '}' to close relation",line:this.peek().line,column:this.peek().column});
+    var node=RelationDecl(sourceTok.value,targetTok.value,fields,loc(startTok,this.tokens[this.pos-1]));
+    node.lifecycle=fields.lifecycle;return node;
+  };
+  Parser.prototype.parseStructure = function() {
+    var startTok=this.expect(TokenType.STRUCTURE),nameTok=this.expect(TokenType.IDENTIFIER);
+    var name=(nameTok&&nameTok.value)?nameTok.value:'(error)';
+    if(!this.check(TokenType.LBRACE)){this.errors.push({message:"Expected '{' after structure '"+name+"'",line:this.peek().line,column:this.peek().column});this.skipToEndOfBlock();return StructureDecl(name,{id:null,state:null,contains:[],spawns:[],delegates:[],checkpoints:[]},loc(startTok,this.tokens[this.pos-1]));}
+    this.advance();
+    var id=null,state=null,contains=[],spawns=[],delegates=[],checkpoints=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      if(this.check(TokenType.ID)) id=this.parseIdField();
+      else if(this.check(TokenType.STATE)) state=this.parseStateField();
+      else if(this.check(TokenType.CONTAINS)){var es=this.parseContainsBlock();for(var _i=0;_i<es.length;_i++)contains.push(es[_i]);}
+      else if(this.check(TokenType.SPAWNS)){var es2=this.parseSpawnsBlock();for(var _j=0;_j<es2.length;_j++)spawns.push(es2[_j]);}
+      else if(this.check(TokenType.DELEGATES)){var es3=this.parseDelegatesBlock();for(var _k=0;_k<es3.length;_k++)delegates.push(es3[_k]);}
+      else if(this.check(TokenType.CHECKPOINTS)){var es4=this.parseCheckpointsBlock();for(var _l=0;_l<es4.length;_l++)checkpoints.push(es4[_l]);}
+      else{var tok=this.peek();this.errors.push({message:"Unexpected '"+tok.value+"' in structure",line:tok.line,column:tok.column});this.advance();}
+    }
+    var end=this.expect(TokenType.RBRACE);
+    return StructureDecl(name,{id,state,contains,spawns,delegates,checkpoints},loc(startTok,end));
+  };
+  Parser.prototype.parseIdField = function() {
+    this.advance();this.expect(TokenType.COLON);var tok=this.peek();
+    if(this.check(TokenType.PATTERN)){var patTok=this.advance();return PatternLiteral(patTok.value,loc(patTok,patTok));}
+    if(this.check(TokenType.STRING)){var strTok=this.advance();return strTok.value;}
+    if(this.check(TokenType.IDENTIFIER)){var pattern=this.advance().value;if(this.check(TokenType.LBRACE)){this.advance();pattern+='{';if(this.check(TokenType.IDENTIFIER))pattern+=this.advance().value;this.expect(TokenType.RBRACE);pattern+='}';}return pattern;}
+    return null;
+  };
+  Parser.prototype.parseStateField = function() {
+    var startTok=this.peek();this.advance();this.expect(TokenType.COLON);
+    var firstTok=this.peek(),first=this.expectIdentifierOrKeyword();if(!first)return null;
+    var values=[first.value];
+    while(this.match(TokenType.PIPE)){var next=this.expectIdentifierOrKeyword();if(next)values.push(next.value);}
+    return EnumType(values,loc(startTok,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseContainsBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var entries=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      var startTok=this.peek(),path='';
+      while(!this.check(TokenType.ARROW)&&!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+        var t=this.peek();
+        if(t.type===TokenType.IDENTIFIER)path+=this.advance().value;
+        else if(t.type===TokenType.DOT){path+='.';this.advance();}
+        else if(t.type===TokenType.SLASH){path+='/';this.advance();}
+        else{this.errors.push({message:"Unexpected '"+t.value+"' in containment path",line:t.line,column:t.column});this.advance();break;}
+      }
+      this.expect(TokenType.ARROW);var typeTok=this.expect(TokenType.IDENTIFIER),cardinality=null;
+      if(this.check(TokenType.LBRACKET))cardinality=this.parseCardinality();
+      entries.push(ContainmentEntry(path,typeTok.value,cardinality,loc(startTok,this.tokens[this.pos-1])));
+    }
+    this.expect(TokenType.RBRACE);return entries;
+  };
+  Parser.prototype.parseSpawnsBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var entries=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      var startTok=this.peek(),typeTok=this.expect(TokenType.IDENTIFIER),cardinality=this.parseCardinality();
+      this.expect(TokenType.FROM);var sourceTok=this.expectIdentifierOrKeyword();
+      entries.push(SpawnEntry(typeTok.value,cardinality,sourceTok?sourceTok.value:'',loc(startTok,this.tokens[this.pos-1])));
+    }
+    this.expect(TokenType.RBRACE);return entries;
+  };
+  Parser.prototype.parseDelegatesBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var entries=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      var startTok=this.peek(),stageTok=this.expectIdentifierOrKeyword();
+      this.expect(TokenType.ARROW);var roleTok=this.expectIdentifierOrKeyword();
+      entries.push(DelegationEntry(stageTok?stageTok.value:'',roleTok?roleTok.value:'',loc(startTok,this.tokens[this.pos-1])));
+    }
+    this.expect(TokenType.RBRACE);return entries;
+  };
+  Parser.prototype.parseCheckpointsBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var entries=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)){
+      var startTok=this.peek(),fromTok=this.expectIdentifierOrKeyword();
+      this.expect(TokenType.ARROW);var toTok=this.expectIdentifierOrKeyword();
+      this.expect(TokenType.COLON);var condTok=this.expect(TokenType.STRING);
+      entries.push(CheckpointEntry(fromTok?fromTok.value:'',toTok?toTok.value:'',condTok.value,loc(startTok,this.tokens[this.pos-1])));
+    }
+    this.expect(TokenType.RBRACE);return entries;
+  };
+  Parser.prototype.parseTransitionsBlock = function() {
+    this.advance();this.expect(TokenType.LBRACE);var rules=[];
+    while(!this.check(TokenType.RBRACE)&&!this.check(TokenType.EOF)) rules.push(this.parseTransitionRule());
+    this.expect(TokenType.RBRACE);return rules;
+  };
+  Parser.prototype.parseTransitionRule = function() {
+    var start=this.expect(TokenType.ON),eventTok=this.expect(TokenType.IDENTIFIER);
+    this.expect(TokenType.ARROW);var targetTok=this.expect(TokenType.IDENTIFIER);
+    return TransitionRule(eventTok.value,targetTok.value,loc(start,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseExpression = function() {
+    var start=this.peek(),left=this.parseConjunction();
+    while(this.check(TokenType.LOGIC_OR)){this.advance();var right=this.parseConjunction();left=LogicalExpression('||',left,right,loc(start,this.tokens[this.pos-1]));}
+    return left;
+  };
+  Parser.prototype.parseConjunction = function() {
+    var start=this.peek(),left=this.parseComparison();
+    while(this.check(TokenType.LOGIC_AND)){this.advance();var right=this.parseComparison();left=LogicalExpression('&&',left,right,loc(start,this.tokens[this.pos-1]));}
+    return left;
+  };
+  Parser.prototype.parseComparison = function() {
+    var start=this.peek();
+    if(this.check(TokenType.LPAREN)){this.advance();var expr=this.parseExpression();this.expect(TokenType.RPAREN);return expr;}
+    var fieldRef=this.parseFieldRefExpr(),op=this.parseCompOp(),right;
+    if(this.check(TokenType.STRING)){var tok=this.advance();right=Literal('string',tok.value,loc(tok,tok));}
+    else if(this.check(TokenType.IDENTIFIER)){var tok2=this.advance();right=Literal('identifier',tok2.value,loc(tok2,tok2));}
+    else{var tok3=this.peek();right=Literal('error','',loc(tok3,tok3));}
+    return BinaryExpression(op,fieldRef,right,loc(start,this.tokens[this.pos-1]));
+  };
+  Parser.prototype.parseCompOp = function() {
+    var tok=this.peek(),ops=[TokenType.COMP_EQ,TokenType.COMP_NE,TokenType.COMP_LE,TokenType.COMP_GE,TokenType.COMP_LT,TokenType.COMP_GT];
+    if(ops.indexOf(tok.type)>=0){this.advance();return tok.value;}
+    return '==';
+  };
+  Parser.prototype.parseFieldRefExpr = function() {
+    var start=this.peek(),firstTok=this.expect(TokenType.IDENTIFIER),segments=[firstTok.value];
+    while(this.check(TokenType.DOT)){this.advance();var segTok=this.expect(TokenType.IDENTIFIER);segments.push(segTok.value);}
+    return FieldRef(segments,loc(start,this.tokens[this.pos-1]));
+  };
+
+  function parse(source) {
+    var tokens=tokenize(source),parser=new Parser(tokens),program=parser.parseProgram();
+    return{ast:program,program,errors:parser.errors};
+  }
+
+  window.PDSL.parser = { tokenize, parse, Parser };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 3: serializer.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  function serialize(ast) {
+    if(!ast||!ast.body||ast.body.length===0) return '';
+    return ast.body.map(function(node){return serializeNode(node,'');}).join('\n\n');
+  }
+  function serializeNode(node,indent) {
+    switch(node.type){
+      case 'Lifecycle': return serializeLifecycle(node,indent);
+      case 'Structure': return serializeStructure(node,indent);
+      case 'Entity':    return serializeEntity(node,indent);
+      case 'Relation':  return serializeRelation(node,indent);
+      default: throw new Error("serialize: unknown node type '"+node.type+"'");
+    }
+  }
+  function serializeLifecycle(node,indent) {
+    var i1=indent+'  ',lines=[indent+'lifecycle '+node.name+' {'];
+    if(node.role)   lines.push(i1+'role: '+node.role);
+    if(node.model)  lines.push(i1+'model: '+node.model);
+    if(node.trigger)lines.push(i1+'trigger: '+serializeExpression(node.trigger));
+    var hasBlocks=(node.input&&node.input.length>0)||(node.execute&&node.execute.length>0)||(node.transitions&&node.transitions.length>0)||(node.completion&&node.completion.length>0);
+    if(hasBlocks&&(node.role||node.model||node.trigger))lines.push('');
+    if(node.input&&node.input.length>0)lines.push.apply(lines,serializeActionBlock('input',node.input,indent));
+    if(node.execute&&node.execute.length>0)lines.push.apply(lines,serializeActionBlock('execute',node.execute,indent));
+    if(node.transitions&&node.transitions.length>0)lines.push.apply(lines,serializeTransitionsBlock(node.transitions,indent));
+    if(node.completion&&node.completion.length>0)lines.push.apply(lines,serializeActionBlock('completion',node.completion,indent));
+    lines.push(indent+'}');return lines.join('\n');
+  }
+  function serializeActionBlock(keyword,steps,indent) {
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+keyword+' {'];
+    for(var i=0;i<steps.length;i++)lines.push(serializeActionStep(steps[i],i2));
+    lines.push(i1+'}');return lines;
+  }
+  function serializeTransitionsBlock(rules,indent) {
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+'transitions {'];
+    for(var i=0;i<rules.length;i++)lines.push(i2+'on '+rules[i].on+' -> '+rules[i].target);
+    lines.push(i1+'}');return lines;
+  }
+  function serializeActionStep(step,indent) {
+    var parts=[step.verb];
+    for(var i=0;i<step.operands.length;i++)parts.push(serializeOperand(step.operands[i]));
+    return indent+parts.join(' ');
+  }
+  function serializeStructure(node,indent) {
+    var i1=indent+'  ',lines=[indent+'structure '+node.name+' {'];
+    if(node.id!==null&&node.id!==undefined)lines.push(i1+'id: '+serializeId(node.id));
+    if(node.state)lines.push(i1+'state: '+serializeEnumValues(node.state.values));
+    var hasBlocks=(node.contains&&node.contains.length>0)||(node.spawns&&node.spawns.length>0)||(node.delegates&&node.delegates.length>0)||(node.checkpoints&&node.checkpoints.length>0);
+    if(hasBlocks&&(node.id!==null&&node.id!==undefined||node.state))lines.push('');
+    if(node.contains&&node.contains.length>0)lines.push.apply(lines,serializeContainsBlock(node.contains,indent));
+    if(node.spawns&&node.spawns.length>0)lines.push.apply(lines,serializeSpawnsBlock(node.spawns,indent));
+    if(node.delegates&&node.delegates.length>0)lines.push.apply(lines,serializeDelegatesBlock(node.delegates,indent));
+    if(node.checkpoints&&node.checkpoints.length>0)lines.push.apply(lines,serializeCheckpointsBlock(node.checkpoints,indent));
+    lines.push(indent+'}');return lines.join('\n');
+  }
+  function serializeId(id) {
+    if(id===null||id===undefined)return '';
+    if(typeof id==='object'&&id.type==='Pattern')return '/'+id.regex+'/';
+    return id;
+  }
+  function serializeEnumValues(values){return values.join(' | ');}
+  function serializeContainsBlock(entries,indent){
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+'contains {'];
+    for(var i=0;i<entries.length;i++){var e=entries[i],card=e.cardinality?'['+e.cardinality.notation+']':'';lines.push(i2+e.path+' -> '+e.targetType+card);}
+    lines.push(i1+'}');return lines;
+  }
+  function serializeSpawnsBlock(entries,indent){
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+'spawns {'];
+    for(var i=0;i<entries.length;i++){var e=entries[i],card=e.cardinality?'['+e.cardinality.notation+']':'';lines.push(i2+e.targetType+card+' from '+e.source);}
+    lines.push(i1+'}');return lines;
+  }
+  function serializeDelegatesBlock(entries,indent){
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+'delegates {'];
+    for(var i=0;i<entries.length;i++)lines.push(i2+entries[i].stage+' -> '+entries[i].role);
+    lines.push(i1+'}');return lines;
+  }
+  function serializeCheckpointsBlock(entries,indent){
+    var i1=indent+'  ',i2=indent+'    ',lines=[i1+'checkpoints {'];
+    for(var i=0;i<entries.length;i++)lines.push(i2+entries[i].fromState+' -> '+entries[i].toState+': "'+entries[i].condition+'"');
+    lines.push(i1+'}');return lines;
+  }
+  function serializeEntity(node,indent){
+    var i1=indent+'  ',lines=[indent+'entity '+node.name+' {'];
+    for(var i=0;i<node.fields.length;i++)lines.push(serializeField(node.fields[i],i1));
+    lines.push(indent+'}');return lines.join('\n');
+  }
+  function serializeField(field,indent){
+    if(field.name==='values'&&field.fieldType&&field.fieldType.type==='Enum')return indent+'values: '+serializeEnumValues(field.fieldType.values);
+    var parts=[indent+field.name+': '];
+    parts.push(serializeTypeExpression(field.fieldType));
+    if(field.pattern)parts.push(' /'+field.pattern.regex+'/');
+    if(field.optional)parts.push(' ?');
+    if(field.default!==null&&field.default!==undefined)parts.push(' = '+serializeLiteralValue(field.default));
+    if(field.cardinality)parts.push(' ['+field.cardinality.notation+']');
+    return parts.join('');
+  }
+  function serializeTypeExpression(typeExpr){
+    if(!typeExpr)return '';
+    if(typeExpr.type==='TypeExpression'){if(typeExpr.kind==='reference')return typeExpr.name;if(typeExpr.kind==='enum')return serializeEnumValues(typeExpr.enumValues);}
+    if(typeExpr.type==='Enum')return serializeEnumValues(typeExpr.values);
+    return '';
+  }
+  function serializeRelation(node,indent){
+    var i1=indent+'  ',lines=[indent+'relation '+node.source+' -> '+node.target+' {'];
+    if(node.relationType)lines.push(i1+'type: '+node.relationType);
+    if(node.via){var arr=node.via.array?'[]':'';lines.push(i1+'via: '+node.via.name+arr);}
+    if(node.cardinality)lines.push(i1+'cardinality: '+node.cardinality.notation);
+    if(node.constraints&&node.constraints.length>0)for(var i=0;i<node.constraints.length;i++)lines.push(i1+'constraint: '+node.constraints[i]);
+    if(node.lifecycle)lines.push(i1+'lifecycle: '+node.lifecycle);
+    lines.push(indent+'}');return lines.join('\n');
+  }
+  function serializeExpression(node){
+    if(!node)return '';
+    switch(node.type){
+      case 'BinaryExpression': return serializeExpression(node.left)+' '+node.operator+' '+serializeExpression(node.right);
+      case 'LogicalExpression': return serializeExpression(node.left)+' '+node.operator+' '+serializeExpression(node.right);
+      case 'FieldRef': return node.segments.join('.');
+      case 'Literal': return serializeLiteralValue(node);
+      default: return '';
+    }
+  }
+  function serializeOperand(node){
+    if(!node)return '';
+    switch(node.type){
+      case 'Literal': return serializeLiteralValue(node);
+      case 'FieldRef': {var s=node.segments.join('.');if(node.assignment!==undefined&&node.assignment!==null)s+=' -> "'+node.assignment+'"';return s;}
+      default: return '';
+    }
+  }
+  function serializeLiteralValue(node){
+    if(!node)return '';
+    switch(node.kind){
+      case 'string': return '"'+node.value+'"';
+      default: return String(node.value);
+    }
+  }
+
+  window.PDSL.serializer = { serialize };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 4: validator.js (lightweight inline)
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var KNOWN_PRIMITIVES = new Set(['string','number','boolean','date','markdown','yaml','json','path']);
+  var WELL_KNOWN_STAGES = new Set(['planning','implementing','reviewing','fixing','completed','researching','wait']);
+
+  function validate(ast) {
+    if(!ast||!Array.isArray(ast.body)) return [];
+    var errors=[], declaredEntities=new Set(), entityFieldMap=new Map();
+    for(var i=0;i<ast.body.length;i++){
+      var node=ast.body[i];
+      if(node.type==='Entity'){
+        declaredEntities.add(node.name);
+        var fields=new Set();
+        if(Array.isArray(node.fields))for(var j=0;j<node.fields.length;j++){if(node.fields[j]&&node.fields[j].name)fields.add(node.fields[j].name);}
+        entityFieldMap.set(node.name,fields);
+      }
+    }
+    for(var i=0;i<ast.body.length;i++){
+      var node=ast.body[i];
+      if(node.type==='Entity'&&Array.isArray(node.fields)){
+        for(var j=0;j<node.fields.length;j++){
+          var f=node.fields[j];if(!f)continue;
+          if(f.fieldType&&f.fieldType.type==='TypeExpression'&&f.fieldType.kind==='reference'){
+            var name=f.fieldType.name;
+            if(!KNOWN_PRIMITIVES.has(name)&&!declaredEntities.has(name))
+              errors.push({message:"Unknown field type '"+name+"'",severity:'error',rule:'unknown_field_type'});
+          }
+        }
+      } else if(node.type==='Relation'){
+        if(node.source&&!declaredEntities.has(node.source))errors.push({message:"Unknown relation source '"+node.source+"'",severity:'error',rule:'unknown_relation_source'});
+        if(node.target&&!declaredEntities.has(node.target))errors.push({message:"Unknown relation target '"+node.target+"'",severity:'error',rule:'unknown_relation_target'});
+      }
+    }
+    return errors;
+  }
+
+  window.PDSL.validator = { validate };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 5: layout.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var DEFAULT_OPTIONS = { nodeWidth:120, nodeHeight:40, layerSpacing:80, nodeSpacing:40 };
+
+  function createLayoutNode(id,label,meta){return{id,label,x:0,y:0,width:0,height:0,layer:0,order:0,meta:meta||{}};}
+  function createLayoutEdge(source,target,label,meta){return{source,target,label:label||'',waypoints:[],meta:meta||{}};}
+  function createLayoutGraph(nodes,edges){
+    var width=0,height=0;
+    for(var i=0;i<nodes.length;i++){var n=nodes[i];if(n.x+n.width>width)width=n.x+n.width;if(n.y+n.height>height)height=n.y+n.height;}
+    return{nodes,edges,width,height};
+  }
+  function adaptLifecycle(decl){
+    var nodes=[],edges=[],rootId='lifecycle:'+decl.name;
+    nodes.push(createLayoutNode(rootId,decl.name,{nodeType:'lifecycle',role:decl.role||null,model:decl.model||null}));
+    var stagesSeen=new Set(),transitions=Array.isArray(decl.transitions)?decl.transitions:[];
+    for(var i=0;i<transitions.length;i++){var rule=transitions[i];if(rule&&rule.target&&!stagesSeen.has(rule.target)){stagesSeen.add(rule.target);nodes.push(createLayoutNode('stage:'+decl.name+':'+rule.target,rule.target,{nodeType:'stage',lifecycle:decl.name}));}}
+    for(var i=0;i<transitions.length;i++){var rule=transitions[i];if(rule&&rule.target)edges.push(createLayoutEdge(rootId,'stage:'+decl.name+':'+rule.target,rule.on||'',{edgeType:'transition',on:rule.on}));}
+    return{nodes,edges};
+  }
+  function adaptStructure(decl){
+    var nodes=[],edges=[],rootId='structure:'+decl.name;
+    nodes.push(createLayoutNode(rootId,decl.name,{nodeType:'structure',id:decl.id||null,state:decl.state||null}));
+    var contains=Array.isArray(decl.contains)?decl.contains:[];
+    for(var i=0;i<contains.length;i++){var e=contains[i],childId='contains:'+decl.name+':'+(e.path||i),label=e.targetType?(e.cardinality?e.targetType+'['+e.cardinality.notation+']':e.targetType):(e.path||''+i);nodes.push(createLayoutNode(childId,label,{nodeType:'containment',path:e.path||null,targetType:e.targetType||null,cardinality:e.cardinality||null}));edges.push(createLayoutEdge(rootId,childId,e.cardinality?e.cardinality.notation:'',{edgeType:'containment'}));}
+    var spawns=Array.isArray(decl.spawns)?decl.spawns:[];
+    for(var i=0;i<spawns.length;i++){var e=spawns[i],childId='spawn:'+decl.name+':'+(e.targetType||i),label=e.targetType?(e.cardinality?e.targetType+'['+e.cardinality.notation+']':e.targetType):''+i;nodes.push(createLayoutNode(childId,label,{nodeType:'spawn',targetType:e.targetType||null,source:e.source||null,cardinality:e.cardinality||null}));edges.push(createLayoutEdge(rootId,childId,e.cardinality?e.cardinality.notation:'',{edgeType:'containment'}));}
+    var delegates=Array.isArray(decl.delegates)?decl.delegates:[];
+    for(var i=0;i<delegates.length;i++){var e=delegates[i],childId='delegate:'+decl.name+':'+(e.stage||i),label=e.role?e.stage+' -> '+e.role:(e.stage||''+i);nodes.push(createLayoutNode(childId,label,{nodeType:'delegation',stage:e.stage||null,role:e.role||null}));edges.push(createLayoutEdge(rootId,childId,'delegates',{edgeType:'delegation'}));}
+    var checkpoints=Array.isArray(decl.checkpoints)?decl.checkpoints:[];
+    for(var i=0;i<checkpoints.length;i++){var e=checkpoints[i],chkId='checkpoint:'+decl.name+':'+e.fromState+':'+e.toState;nodes.push(createLayoutNode(chkId,e.condition||e.fromState+' -> '+e.toState,{nodeType:'checkpoint',fromState:e.fromState||null,toState:e.toState||null,condition:e.condition||null}));edges.push(createLayoutEdge(rootId,chkId,e.condition||'',{edgeType:'containment'}));}
+    return{nodes,edges};
+  }
+  function adaptEntity(decl){
+    var nodeId='entity:'+decl.name;
+    var fields=Array.isArray(decl.fields)?decl.fields.map(function(f){return{name:f.name,type:f.fieldType?(f.fieldType.name||f.fieldType.kind||'unknown'):'unknown',optional:f.optional||false};}):[];
+    return{nodes:[createLayoutNode(nodeId,decl.name,{nodeType:'entity',fields})],edges:[]};
+  }
+  function adaptRelations(relationDecls,entityNodeMap){
+    var edges=[];
+    for(var i=0;i<relationDecls.length;i++){
+      var decl=relationDecls[i],srcId=entityNodeMap.get(decl.source),tgtId=entityNodeMap.get(decl.target);
+      var source=srcId||'entity:'+decl.source,target=tgtId||'entity:'+decl.target;
+      var cardNotation=decl.cardinality?decl.cardinality.notation:'',label=[decl.relationType,cardNotation].filter(Boolean).join(' ');
+      edges.push(createLayoutEdge(source,target,label,{edgeType:'relation',relationType:decl.relationType||null,cardinality:decl.cardinality||null,isSelfRef:decl.source===decl.target,via:decl.via||null}));
+    }
+    return edges;
+  }
+  function adaptProgram(program){
+    var allNodes=[],allEdges=[],entityNodeMap=new Map(),body=Array.isArray(program.body)?program.body:[];
+    for(var i=0;i<body.length;i++){
+      var decl=body[i];if(!decl)continue;
+      if(decl.type==='Lifecycle'){var r=adaptLifecycle(decl);allNodes.push.apply(allNodes,r.nodes);allEdges.push.apply(allEdges,r.edges);}
+      else if(decl.type==='Structure'){var r=adaptStructure(decl);allNodes.push.apply(allNodes,r.nodes);allEdges.push.apply(allEdges,r.edges);}
+      else if(decl.type==='Entity'){var r=adaptEntity(decl);allNodes.push.apply(allNodes,r.nodes);allEdges.push.apply(allEdges,r.edges);for(var j=0;j<r.nodes.length;j++)entityNodeMap.set(decl.name,r.nodes[j].id);}
+    }
+    var relationDecls=body.filter(function(d){return d&&d.type==='Relation';});
+    if(relationDecls.length>0)allEdges.push.apply(allEdges,adaptRelations(relationDecls,entityNodeMap));
+    return{nodes:allNodes,edges:allEdges};
+  }
+  function assignLayers(graph){
+    var nodes=graph.nodes,edges=graph.edges,nodeIds=new Set(nodes.map(function(n){return n.id;}));
+    var inDegree=new Map(),successors=new Map();
+    for(var id of nodeIds){inDegree.set(id,0);successors.set(id,[]);}
+    var visited=new Set(),inStack=new Set(),adjForDFS=new Map();
+    for(var id of nodeIds)adjForDFS.set(id,[]);
+    for(var i=0;i<edges.length;i++){var e=edges[i];if(nodeIds.has(e.source)&&nodeIds.has(e.target))adjForDFS.get(e.source).push(e);}
+    function dfs(id){
+      visited.add(id);inStack.add(id);
+      var adj=adjForDFS.get(id)||[];
+      for(var i=0;i<adj.length;i++){var edge=adj[i];if(!nodeIds.has(edge.target))continue;if(!visited.has(edge.target))dfs(edge.target);else if(inStack.has(edge.target)){edge.meta=edge.meta||{};edge.meta.isFeedback=true;}}
+      inStack.delete(id);
+    }
+    for(var id of nodeIds){if(!visited.has(id))dfs(id);}
+    for(var i=0;i<edges.length;i++){var e=edges[i];if(e.meta&&e.meta.isFeedback)continue;if(!nodeIds.has(e.source)||!nodeIds.has(e.target))continue;if(e.source!==e.target){inDegree.set(e.target,(inDegree.get(e.target)||0)+1);successors.get(e.source).push(e.target);}}
+    var layers=new Map(),queue=[];
+    for(var p of inDegree){if(p[1]===0)queue.push(p[0]);}
+    while(queue.length>0){
+      var id=queue.shift(),layer=layers.get(id)||0;
+      var succs=successors.get(id)||[];
+      for(var i=0;i<succs.length;i++){var succId=succs[i],newLayer=Math.max(layers.get(succId)||0,layer+1);layers.set(succId,newLayer);inDegree.set(succId,inDegree.get(succId)-1);if(inDegree.get(succId)===0)queue.push(succId);}
+    }
+    for(var id of nodeIds){if(!layers.has(id))layers.set(id,0);}
+    return layers;
+  }
+  function orderNodesInLayers(graph,layerMap){
+    var byLayer=new Map();
+    for(var i=0;i<graph.nodes.length;i++){var node=graph.nodes[i],layer=layerMap.get(node.id)||0;node.layer=layer;if(!byLayer.has(layer))byLayer.set(layer,[]);byLayer.get(layer).push(node);}
+    var predPositions=new Map();
+    for(var i=0;i<graph.edges.length;i++){var e=graph.edges[i];if(e.meta&&e.meta.isFeedback)continue;if(e.meta&&e.meta.isSelfRef)continue;if(e.source===e.target)continue;var sl=layerMap.get(e.source),tl=layerMap.get(e.target);if(sl===undefined||tl===undefined)continue;if(sl>=tl)continue;if(!predPositions.has(e.target))predPositions.set(e.target,[]);predPositions.get(e.target).push(e.source);}
+    var sortedLayers=Array.from(byLayer.keys()).sort(function(a,b){return a-b;}),orderMap=new Map();
+    for(var li=0;li<sortedLayers.length;li++){
+      var layer=sortedLayers[li],nodesInLayer=byLayer.get(layer);
+      if(layer===0||!nodesInLayer){nodesInLayer.sort(function(a,b){return a.id.localeCompare(b.id);});nodesInLayer.forEach(function(n,i){n.order=i;orderMap.set(n.id,i);});continue;}
+      var withBary=nodesInLayer.map(function(node){var preds=predPositions.get(node.id)||[];if(preds.length===0)return{node,bary:Infinity};var sum=0,count=0;for(var i=0;i<preds.length;i++){if(orderMap.has(preds[i])){sum+=orderMap.get(preds[i]);count++;}}return{node,bary:count>0?sum/count:Infinity};});
+      withBary.sort(function(a,b){if(a.bary!==b.bary)return a.bary-b.bary;return a.node.id.localeCompare(b.node.id);});
+      withBary.forEach(function(item,i){item.node.order=i;orderMap.set(item.node.id,i);});
+    }
+  }
+  function assignCoordinates(graph,layerMap,options){
+    var opts=Object.assign({},DEFAULT_OPTIONS,options);
+    var nodeWidth=opts.nodeWidth,nodeHeight=opts.nodeHeight,layerSpacing=opts.layerSpacing,nodeSpacing=opts.nodeSpacing;
+    var byLayer=new Map();
+    for(var i=0;i<graph.nodes.length;i++){var node=graph.nodes[i],layer=node.layer;if(!byLayer.has(layer))byLayer.set(layer,[]);byLayer.get(layer).push(node);}
+    var maxLayerWidth=0;
+    for(var p of byLayer){var w=p[1].length*(nodeWidth+nodeSpacing)-nodeSpacing;if(w>maxLayerWidth)maxLayerWidth=w;}
+    for(var p of byLayer){
+      var layer=p[0],nodesInLayer=p[1];
+      nodesInLayer.sort(function(a,b){return a.order-b.order;});
+      var totalWidth=nodesInLayer.length*(nodeWidth+nodeSpacing)-nodeSpacing,xOffset=Math.floor((maxLayerWidth-totalWidth)/2);
+      var y=layer*(nodeHeight+layerSpacing);
+      nodesInLayer.forEach(function(node,i){node.x=xOffset+i*(nodeWidth+nodeSpacing);node.y=y;node.width=nodeWidth;node.height=nodeHeight;});
+    }
+  }
+  function routeEdges(graph){
+    var nodeMap=new Map(graph.nodes.map(function(n){return[n.id,n];}));
+    for(var i=0;i<graph.edges.length;i++){
+      var edge=graph.edges[i],src=nodeMap.get(edge.source),tgt=nodeMap.get(edge.target);
+      if(!src||!tgt){edge.waypoints=[{x:0,y:0},{x:0,y:0}];continue;}
+      if(src===tgt||edge.source===edge.target){var cx=src.x+src.width/2,cy=src.y,r=20;edge.waypoints=[{x:cx-r,y:cy},{x:cx-r,y:cy-r*2},{x:cx+r,y:cy-r*2},{x:cx+r,y:cy}];continue;}
+      var srcX=src.x+src.width/2,srcY=src.y+src.height,tgtX=tgt.x+tgt.width/2,tgtY=tgt.y;
+      if(edge.meta&&edge.meta.isFeedback){var leftX=Math.min(src.x,tgt.x)-30,midSrcY=src.y+src.height/2,midTgtY=tgt.y+tgt.height/2;edge.waypoints=[{x:src.x,y:midSrcY},{x:leftX,y:midSrcY},{x:leftX,y:midTgtY},{x:tgt.x,y:midTgtY}];continue;}
+      if(src.layer===tgt.layer){var aboveY=src.y-30;edge.waypoints=[{x:srcX,y:src.y},{x:srcX,y:aboveY},{x:tgtX,y:aboveY},{x:tgtX,y:tgt.y}];continue;}
+      var midY=srcY+(tgtY-srcY)/2;
+      if(srcX===tgtX)edge.waypoints=[{x:srcX,y:srcY},{x:tgtX,y:tgtY}];
+      else edge.waypoints=[{x:srcX,y:srcY},{x:srcX,y:midY},{x:tgtX,y:midY},{x:tgtX,y:tgtY}];
+    }
+  }
+  function layout(ast,options){
+    var program=ast&&ast.type==='Program'?ast:(ast&&ast.ast?ast.ast:(ast&&ast.program?ast.program:ast));
+    var graph=adaptProgram(program||{body:[]});
+    var layerMap=assignLayers(graph);
+    orderNodesInLayers(graph,layerMap);
+    assignCoordinates(graph,layerMap,options);
+    routeEdges(graph);
+    return createLayoutGraph(graph.nodes,graph.edges);
+  }
+
+  window.PDSL.layout = { layout };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 6: themes.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var DEFAULT_THEME = {
+    stages: {
+      planning:     {fill:'#E3F2FD',stroke:'#1976D2',headerFill:'#1976D2',textColor:'#0D47A1'},
+      implementing: {fill:'#E8F5E9',stroke:'#388E3C',headerFill:'#388E3C',textColor:'#1B5E20'},
+      reviewing:    {fill:'#FFF3E0',stroke:'#F57C00',headerFill:'#F57C00',textColor:'#E65100'},
+      fixing:       {fill:'#FFEBEE',stroke:'#D32F2F',headerFill:'#D32F2F',textColor:'#B71C1C'},
+      completed:    {fill:'#E0F2F1',stroke:'#00796B',headerFill:'#00796B',textColor:'#004D40'},
+      researching:  {fill:'#F3E5F5',stroke:'#7B1FA2',headerFill:'#7B1FA2',textColor:'#4A148C'},
+    },
+    entity: {fill:'#FAFAFA',stroke:'#455A64',headerFill:'#455A64',headerStroke:'#263238',textColor:'#212121',headerText:'#FFFFFF'},
+    generic: {fill:'#F5F5F5',stroke:'#9E9E9E',headerFill:'#9E9E9E',textColor:'#424242'},
+    edge: {stroke:'#546E7A',strokeWidth:1.5,arrowSize:8,labelColor:'#37474F'},
+    font: {family:'monospace, "Courier New", Courier',sizeTitle:13,sizeBody:11,sizeLabel:10},
+    spacing: {padding:8,headerHeight:24,fieldRowHeight:18,cornerRadius:4},
+  };
+  function deepMerge(base,overrides){
+    if(!overrides||typeof overrides!=='object'||Array.isArray(overrides))return overrides!==undefined?overrides:base;
+    var result=Object.assign({},base);
+    for(var key of Object.keys(overrides)){var bVal=base[key],oVal=overrides[key];if(oVal!==null&&typeof oVal==='object'&&!Array.isArray(oVal)&&bVal!==null&&typeof bVal==='object'&&!Array.isArray(bVal))result[key]=deepMerge(bVal,oVal);else result[key]=oVal;}
+    return result;
+  }
+  function defaultTheme(){return Object.freeze(JSON.parse(JSON.stringify(DEFAULT_THEME)));}
+  function createTheme(overrides){return deepMerge(JSON.parse(JSON.stringify(DEFAULT_THEME)),overrides||{});}
+  function getNodeStyle(theme,node){var meta=node.meta||{},kind=meta.kind||meta.nodeType||'generic';if(kind==='entity')return theme.entity;if(theme.stages&&theme.stages[kind])return theme.stages[kind];return theme.generic;}
+
+  window.PDSL.themes = { defaultTheme, createTheme, getNodeStyle };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 7: renderer.js (with data-entity attributes for interactions)
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var themes = window.PDSL.themes;
+
+  function escapeXml(str){
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+  }
+  function waypointsToPoints(waypoints){return waypoints.map(function(p){return p.x+','+p.y;}).join(' ');}
+  function midpoint(waypoints){
+    if(!waypoints||waypoints.length===0)return{x:0,y:0};
+    var mid=Math.floor(waypoints.length/2);
+    if(waypoints.length===1)return waypoints[0];
+    var a=waypoints[mid-1],b=waypoints[mid];
+    return{x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+  }
+
+  function renderStandardNode(node,style,theme){
+    var x=node.x,y=node.y,w=node.width,h=node.height,label=node.label;
+    var r=theme.spacing.cornerRadius,cx=x+w/2,cy=y+h/2;
+    var rect='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+r+'" ry="'+r+'" fill="'+escapeXml(style.fill)+'" stroke="'+escapeXml(style.stroke)+'" stroke-width="1.5" />';
+    var text='<text x="'+cx+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" font-family="'+escapeXml(theme.font.family)+'" font-size="'+theme.font.sizeTitle+'" fill="'+escapeXml(style.textColor)+'">'+escapeXml(label)+'</text>';
+    return '<g class="node node-standard" data-id="'+escapeXml(node.id)+'">'+rect+text+'</g>';
+  }
+
+  function renderEntityNode(node,style,theme){
+    var x=node.x,y=node.y,w=node.width,h=node.height,label=node.label;
+    var hh=theme.spacing.headerHeight,frh=theme.spacing.fieldRowHeight,r=theme.spacing.cornerRadius,pad=theme.spacing.padding;
+    var fields=(node.meta&&Array.isArray(node.meta.fields))?node.meta.fields:[];
+    // Compute actual height for entity (may override layout height)
+    var actualH=hh+pad+fields.length*frh+pad;
+    if(actualH<h)actualH=h;
+
+    var lines=[];
+    // Outer rect
+    lines.push('<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+actualH+'" rx="'+r+'" ry="'+r+'" fill="'+escapeXml(style.fill)+'" stroke="'+escapeXml(style.stroke)+'" stroke-width="1.5" />');
+    // Header rect (with data-entity-header for dblclick interaction)
+    lines.push('<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+hh+'" rx="'+r+'" ry="'+r+'" fill="'+escapeXml(style.headerFill)+'" stroke="'+escapeXml(style.stroke)+'" stroke-width="1.5" data-entity-header="'+escapeXml(label)+'" style="cursor:pointer" />');
+    // Square off bottom of header
+    lines.push('<rect x="'+x+'" y="'+(y+hh/2)+'" width="'+w+'" height="'+(hh/2)+'" fill="'+escapeXml(style.headerFill)+'" stroke="none" />');
+    // Header text (also with data-entity-header)
+    var headerTextColor=style.headerText||'#FFFFFF';
+    lines.push('<text x="'+(x+w/2)+'" y="'+(y+hh/2)+'" text-anchor="middle" dominant-baseline="central" font-family="'+escapeXml(theme.font.family)+'" font-size="'+theme.font.sizeTitle+'" font-weight="bold" fill="'+escapeXml(headerTextColor)+'" data-entity-header="'+escapeXml(label)+'" style="cursor:pointer;pointer-events:none">'+escapeXml(label)+'</text>');
+    // Divider
+    lines.push('<line x1="'+x+'" y1="'+(y+hh)+'" x2="'+(x+w)+'" y2="'+(y+hh)+'" stroke="'+escapeXml(style.stroke)+'" stroke-width="1" />');
+    // Field rows
+    for(var i=0;i<fields.length;i++){
+      var fieldY=y+hh+pad+(i+0.5)*frh;
+      var fieldText=fields[i].name+': '+fields[i].type+(fields[i].optional?' ?':'');
+      lines.push('<text x="'+(x+pad)+'" y="'+fieldY+'" text-anchor="start" dominant-baseline="central" font-family="'+escapeXml(theme.font.family)+'" font-size="'+theme.font.sizeBody+'" fill="'+escapeXml(style.textColor)+'">'+escapeXml(fieldText)+'</text>');
+    }
+
+    // Wrap in group with data-entity for right-click
+    return '<g class="node node-entity" data-id="'+escapeXml(node.id)+'" data-entity="'+escapeXml(label)+'">'+lines.join('')+'</g>';
+  }
+
+  function renderNode(node,theme){
+    var style=themes.getNodeStyle(theme,node);
+    var kind=(node.meta&&(node.meta.kind||node.meta.nodeType))||'generic';
+    if(kind==='entity'&&node.meta&&Array.isArray(node.meta.fields)) return renderEntityNode(node,style,theme);
+    return renderStandardNode(node,style,theme);
+  }
+
+  function buildSelfLoopPath(waypoints){
+    if(waypoints.length<4){var p=waypoints[0]||{x:0,y:0};return 'M '+p.x+','+p.y+' C '+(p.x-30)+','+(p.y-60)+' '+(p.x+30)+','+(p.y-60)+' '+p.x+','+p.y;}
+    var p0=waypoints[0],p1=waypoints[1],p2=waypoints[2],p3=waypoints[3];
+    return 'M '+p0.x+','+p0.y+' L '+p1.x+','+p1.y+' L '+p2.x+','+p2.y+' L '+p3.x+','+p3.y;
+  }
+
+  function renderEdge(edge,theme){
+    var waypoints=edge.waypoints||[],label=edge.label,meta=edge.meta||{};
+    var stroke=theme.edge.stroke,strokeWidth=theme.edge.strokeWidth,labelColor=theme.edge.labelColor;
+    var isSelfRef=meta.isSelfRef||edge.source===edge.target,lines=[];
+    if(isSelfRef){lines.push('<path d="'+escapeXml(buildSelfLoopPath(waypoints))+'" fill="none" stroke="'+escapeXml(stroke)+'" stroke-width="'+strokeWidth+'" marker-end="url(#arrowhead)" />');}
+    else if(waypoints.length>=2){lines.push('<polyline points="'+escapeXml(waypointsToPoints(waypoints))+'" fill="none" stroke="'+escapeXml(stroke)+'" stroke-width="'+strokeWidth+'" marker-end="url(#arrowhead)" />');}
+    if(label&&label.trim()){var mp=midpoint(waypoints);lines.push('<text x="'+mp.x+'" y="'+(mp.y-6)+'" text-anchor="middle" font-family="'+escapeXml(theme.font.family)+'" font-size="'+theme.font.sizeLabel+'" fill="'+escapeXml(labelColor)+'">'+escapeXml(label)+'</text>');}
+    return '<g class="edge" data-source="'+escapeXml(edge.source)+'" data-target="'+escapeXml(edge.target)+'">'+lines.join('')+'</g>';
+  }
+
+  function renderDefs(theme){
+    var stroke=theme.edge.stroke,arrowSize=theme.edge.arrowSize,half=arrowSize/2;
+    return '<defs><marker id="arrowhead" markerWidth="'+arrowSize+'" markerHeight="'+arrowSize+'" refX="'+(arrowSize-1)+'" refY="'+half+'" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,'+arrowSize+' L'+arrowSize+','+half+' z" fill="'+escapeXml(stroke)+'" /></marker></defs>';
+  }
+
+  function render(layoutGraph,theme){
+    if(!theme)theme=themes.defaultTheme();
+    var nodes=layoutGraph.nodes||[],edges=layoutGraph.edges||[];
+    var MARGIN=20,width=(layoutGraph.width||0)+MARGIN*2,height=(layoutGraph.height||0)+MARGIN*2;
+    var svgWidth=Math.max(width,200),svgHeight=Math.max(height,120);
+    var lines=[];
+    lines.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgWidth+' '+svgHeight+'" width="'+svgWidth+'" height="'+svgHeight+'">');
+    lines.push(renderDefs(theme));
+    lines.push('<g class="edges">');
+    for(var i=0;i<edges.length;i++)lines.push(renderEdge(edges[i],theme));
+    lines.push('</g>');
+    lines.push('<g class="nodes">');
+    for(var i=0;i<nodes.length;i++)lines.push(renderNode(nodes[i],theme));
+    lines.push('</g>');
+    lines.push('</svg>');
+    return lines.join('\n');
+  }
+
+  window.PDSL.renderer = { render };
+})();
+</script>
+
+<!-- ============================================================
+     MODULE 8: editor.js
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+  var _ast = window.PDSL.ast;
+  var EntityDecl = _ast.EntityDecl;
+  var FieldDecl = _ast.FieldDecl;
+  var TypeExpression = _ast.TypeExpression;
+  var Program = _ast.Program;
+
+  var EditCommand = Object.freeze({
+    ADD_FIELD:     'addField',
+    REMOVE_FIELD:  'removeField',
+    RENAME_ENTITY: 'renameEntity',
+  });
+
+  function addFieldCommand(entityName,fieldName,fieldType){return{type:EditCommand.ADD_FIELD,entityName,fieldName,fieldType};}
+  function removeFieldCommand(entityName,fieldName){return{type:EditCommand.REMOVE_FIELD,entityName,fieldName};}
+  function renameEntityCommand(oldName,newName){return{type:EditCommand.RENAME_ENTITY,oldName,newName};}
+
+  function applyEdit(ast,command){
+    if(!ast||!Array.isArray(ast.body)) throw new Error('applyEdit: ast must be a Program node with a body array');
+    if(!command||!command.type) throw new Error('applyEdit: command must have a type property');
+    switch(command.type){
+      case EditCommand.ADD_FIELD:     return applyAddField(ast,command);
+      case EditCommand.REMOVE_FIELD:  return applyRemoveField(ast,command);
+      case EditCommand.RENAME_ENTITY: return applyRenameEntity(ast,command);
+      default: throw new Error("applyEdit: unknown command type '"+command.type+"'");
+    }
+  }
+
+  function applyAddField(ast,command){
+    var entityName=command.entityName,fieldName=command.fieldName,fieldType=command.fieldType;
+    var entityIndex=ast.body.findIndex(function(n){return n&&n.type==='Entity'&&n.name===entityName;});
+    if(entityIndex===-1) throw new Error("applyEdit addField: entity '"+entityName+"' not found");
+    var entity=ast.body[entityIndex];
+    var newField=FieldDecl(fieldName,{fieldType:TypeExpression('reference',fieldType,null,null),optional:false,defaultValue:null,pattern:null,cardinality:null},null);
+    var updatedEntity=EntityDecl(entity.name,(Array.isArray(entity.fields)?entity.fields:[]).concat([newField]),entity.loc);
+    var newBody=ast.body.slice();newBody[entityIndex]=updatedEntity;
+    return Program(newBody,ast.comments||[],ast.loc);
+  }
+
+  function applyRemoveField(ast,command){
+    var entityName=command.entityName,fieldName=command.fieldName;
+    var entityIndex=ast.body.findIndex(function(n){return n&&n.type==='Entity'&&n.name===entityName;});
+    if(entityIndex===-1) throw new Error("applyEdit removeField: entity '"+entityName+"' not found");
+    var entity=ast.body[entityIndex];
+    var updatedFields=(Array.isArray(entity.fields)?entity.fields:[]).filter(function(f){return f&&f.name!==fieldName;});
+    var updatedEntity=EntityDecl(entity.name,updatedFields,entity.loc);
+    var newBody=ast.body.slice();newBody[entityIndex]=updatedEntity;
+    return Program(newBody,ast.comments||[],ast.loc);
+  }
+
+  function applyRenameEntity(ast,command){
+    var oldName=command.oldName,newName=command.newName;
+    var entityIndex=ast.body.findIndex(function(n){return n&&n.type==='Entity'&&n.name===oldName;});
+    if(entityIndex===-1) throw new Error("applyEdit renameEntity: entity '"+oldName+"' not found");
+    var entity=ast.body[entityIndex];
+    var updatedEntity=EntityDecl(newName,entity.fields||[],entity.loc);
+    var newBody=ast.body.slice();newBody[entityIndex]=updatedEntity;
+    for(var i=0;i<newBody.length;i++){
+      var node=newBody[i];if(!node||node.type!=='Relation')continue;
+      var updatedSource=node.source===oldName?newName:node.source;
+      var updatedTarget=node.target===oldName?newName:node.target;
+      if(updatedSource!==node.source||updatedTarget!==node.target)newBody[i]=Object.assign({},node,{source:updatedSource,target:updatedTarget});
+    }
+    return Program(newBody,ast.comments||[],ast.loc);
+  }
+
+  window.PDSL.editor = { EditCommand, addFieldCommand, removeFieldCommand, renameEntityCommand, applyEdit };
+})();
+</script>
+
+<!-- ============================================================
+     UI APPLICATION LOGIC
+     ============================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  var sourceTextarea = document.getElementById('source');
+  var errorPanel     = document.getElementById('error-panel');
+  var svgContainer   = document.getElementById('svg-container');
+  var contextMenu    = document.getElementById('context-menu');
+  var divider        = document.getElementById('divider');
+  var leftPane       = document.getElementById('left-pane');
+
+  // Default PDSL example shown on load
+  var DEFAULT_EXAMPLE = [
+    'entity Task {',
+    '  id: string',
+    '  title: string',
+    '  status: string',
+    '  assignee: string ?',
+    '}',
+    '',
+    'entity Adventure {',
+    '  id: string',
+    '  title: string',
+    '  stage: string',
+    '}',
+    '',
+    'relation Task -> Adventure {',
+    '  type: belongs_to',
+    '  cardinality: 1..*',
+    '}',
+    '',
+    'lifecycle PlanningCycle {',
+    '  role: planner',
+    '  model: opus',
+    '',
+    '  transitions {',
+    '    on complete -> implementing',
+    '    on revise -> planning',
+    '  }',
+    '}',
+  ].join('\n');
+
+  // ---- Debounced re-render ----
+  var debounceTimer = null;
+  function scheduleRender() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(renderDiagram, 300);
+  }
+
+  sourceTextarea.addEventListener('input', scheduleRender);
+
+  // ---- Main render function ----
+  function renderDiagram() {
+    var source = sourceTextarea.value;
+    var result = window.PDSL.parser.parse(source);
+    var ast = result.ast;
+    var errors = result.errors;
+
+    if (errors.length > 0) {
+      errorPanel.textContent = errors.map(function(e) {
+        return 'Line ' + e.line + ':' + e.column + ' ' + e.message;
+      }).join('\n');
+      // Keep previous diagram visible on error
+      return;
+    }
+    errorPanel.textContent = '';
+
+    try {
+      // Use slightly larger node height for entity nodes (layout uses 40 by default)
+      var graph = window.PDSL.layout.layout(ast, { nodeHeight: 40 });
+      var theme = window.PDSL.themes.defaultTheme();
+      var svgString = window.PDSL.renderer.render(graph, theme);
+      svgContainer.innerHTML = svgString;
+      attachEntityEvents();
+    } catch (err) {
+      errorPanel.textContent = 'Render error: ' + err.message;
+    }
+  }
+
+  // ---- Entity interaction ----
+  function attachEntityEvents() {
+    // Double-click on header rects/text to rename
+    var headers = svgContainer.querySelectorAll('[data-entity-header]');
+    headers.forEach(function(el) {
+      el.addEventListener('dblclick', handleRename);
+    });
+
+    // Right-click on entity group for context menu
+    var entityGroups = svgContainer.querySelectorAll('[data-entity]');
+    entityGroups.forEach(function(el) {
+      el.addEventListener('contextmenu', handleContextMenu);
+    });
+  }
+
+  function getEntityName(target) {
+    // Walk up to find [data-entity]
+    var el = target;
+    while (el && el !== svgContainer) {
+      if (el.dataset && el.dataset.entity) return el.dataset.entity;
+      if (el.getAttribute && el.getAttribute('data-entity-header')) return el.getAttribute('data-entity-header');
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function handleRename(event) {
+    var entityName = event.currentTarget.getAttribute('data-entity-header') ||
+                     getEntityName(event.currentTarget);
+    if (!entityName) return;
+
+    var newName = window.prompt('Rename entity "' + entityName + '" to:', entityName);
+    if (!newName || newName.trim() === '' || newName.trim() === entityName) return;
+    newName = newName.trim();
+
+    try {
+      var result = window.PDSL.parser.parse(sourceTextarea.value);
+      if (result.errors.length > 0) { alert('Fix parse errors before renaming.'); return; }
+      var newAst = window.PDSL.editor.applyEdit(result.ast, window.PDSL.editor.renameEntityCommand(entityName, newName));
+      sourceTextarea.value = window.PDSL.serializer.serialize(newAst);
+      renderDiagram();
+    } catch(err) {
+      alert('Rename failed: ' + err.message);
+    }
+  }
+
+  function handleContextMenu(event) {
+    event.preventDefault();
+    var entityName = event.currentTarget.getAttribute('data-entity') ||
+                     getEntityName(event.currentTarget);
+    if (!entityName) return;
+
+    showContextMenu(event.clientX, event.clientY, [
+      {
+        label: 'Add field\u2026',
+        action: function() { handleAddField(entityName); }
+      },
+      {
+        label: 'Rename\u2026',
+        action: function() {
+          var newName = window.prompt('Rename entity "' + entityName + '" to:', entityName);
+          if (!newName || newName.trim() === '' || newName.trim() === entityName) return;
+          newName = newName.trim();
+          try {
+            var result = window.PDSL.parser.parse(sourceTextarea.value);
+            var newAst = window.PDSL.editor.applyEdit(result.ast, window.PDSL.editor.renameEntityCommand(entityName, newName));
+            sourceTextarea.value = window.PDSL.serializer.serialize(newAst);
+            renderDiagram();
+          } catch(err) { alert('Rename failed: ' + err.message); }
+        }
+      },
+    ]);
+  }
+
+  function handleAddField(entityName) {
+    var fieldSpec = window.prompt(
+      'Add field to "' + entityName + '":\nFormat: fieldName: fieldType\nExample: createdAt: string',
+      'newField: string'
+    );
+    if (!fieldSpec) return;
+    var parts = fieldSpec.split(':');
+    if (parts.length < 2) { alert('Invalid format. Use: fieldName: fieldType'); return; }
+    var fieldName = parts[0].trim();
+    var fieldType = parts.slice(1).join(':').trim();
+    if (!fieldName || !fieldType) { alert('Both field name and type are required.'); return; }
+
+    try {
+      var result = window.PDSL.parser.parse(sourceTextarea.value);
+      if (result.errors.length > 0) { alert('Fix parse errors before adding fields.'); return; }
+      var newAst = window.PDSL.editor.applyEdit(result.ast, window.PDSL.editor.addFieldCommand(entityName, fieldName, fieldType));
+      sourceTextarea.value = window.PDSL.serializer.serialize(newAst);
+      renderDiagram();
+    } catch(err) {
+      alert('Add field failed: ' + err.message);
+    }
+  }
+
+  // ---- Context menu ----
+  function showContextMenu(x, y, items) {
+    contextMenu.innerHTML = '';
+    items.forEach(function(item) {
+      var div = document.createElement('div');
+      div.className = 'context-menu-item';
+      div.textContent = item.label;
+      div.addEventListener('click', function() {
+        hideContextMenu();
+        item.action();
+      });
+      contextMenu.appendChild(div);
+    });
+    contextMenu.style.left = x + 'px';
+    contextMenu.style.top  = y + 'px';
+    contextMenu.style.display = 'block';
+  }
+
+  function hideContextMenu() {
+    contextMenu.style.display = 'none';
+  }
+
+  document.addEventListener('click', hideContextMenu);
+  document.addEventListener('keydown', function(e) { if(e.key==='Escape') hideContextMenu(); });
+
+  // ---- Draggable divider ----
+  var isDragging = false;
+  divider.addEventListener('mousedown', function(e) {
+    isDragging = true;
+    divider.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var appRect = document.getElementById('app').getBoundingClientRect();
+    var x = e.clientX - appRect.left;
+    var pct = (x / appRect.width) * 100;
+    pct = Math.max(20, Math.min(80, pct));
+    leftPane.style.width = pct + '%';
+  });
+  document.addEventListener('mouseup', function() {
+    if (isDragging) { isDragging = false; divider.classList.remove('dragging'); }
+  });
+
+  // ---- Initialize ----
+  sourceTextarea.value = DEFAULT_EXAMPLE;
+  renderDiagram();
+
+})();
+</script>
+
+</body>
+</html>

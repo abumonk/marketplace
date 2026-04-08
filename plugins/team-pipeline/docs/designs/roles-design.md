@@ -173,7 +173,7 @@ project/
 | planner | opus | 30 | planning | -- | patterns, decisions |
 | implementer | sonnet | 50 | implementing, fixing | testing | patterns, decisions |
 | reviewer | opus | 25 | reviewing | -- | patterns, issues |
-| researcher | haiku | 15 | researching | -- | patterns, issues, decisions |
+| researcher | opus | 15 | researching | -- | patterns, issues, decisions |
 | coder | sonnet | 50 | implementing, fixing | testing, linting | patterns, decisions, conventions |
 | code-reviewer | opus | 25 | reviewing | linting | patterns, issues, conventions |
 | designer | opus | 30 | planning | -- | patterns, decisions |

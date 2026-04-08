@@ -32,6 +32,7 @@ Create the full directory tree:
 .agent/adventures/{ADV-ID}/tasks/archive/
 .agent/adventures/{ADV-ID}/roles/
 .agent/adventures/{ADV-ID}/tests/
+.agent/adventures/{ADV-ID}/reviews/
 ```
 
 ### 4. Extract Concept

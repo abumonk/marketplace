@@ -1,0 +1,83 @@
+// pipeline-entities.pdsl
+// Entity and relation declarations for the team-pipeline domain model.
+// Covers all data types: Task, Adventure, Stage, Status,
+// AdventureState, and TargetCondition.
+
+entity Task {
+  id:                 string /TASK-\d+|ADV\d{3}-T\d{3}/
+  title:              string
+  stage:              Stage
+  status:             Status
+  iterations:         number = 0
+  depends_on:         Task[0..*]
+  adventure_id:       Adventure?
+  target_conditions:  TargetCondition[0..*]
+  assignee:           string
+  created:            string
+  updated:            string
+}
+
+entity Stage {
+  values: planning | implementing | reviewing | fixing | completed | researching | BLOCKED
+}
+
+entity Status {
+  values: pending | in_progress | ready | blocked | cancelled
+}
+
+entity Adventure {
+  id:          string /ADV-\d+/
+  title:       string
+  state:       AdventureState
+  tasks:       Task[0..*]
+  created:     string
+  updated:     string
+  environment: Environment?
+}
+
+entity Environment {
+  project:    string
+  workspace:  string
+  repo:       string
+  branch:     string
+  pc:         string
+  platform:   string
+  runtime:    string
+  shell:      string
+}
+
+entity AdventureState {
+  values: concept | planning | review | active | paused | blocked | completed | cancelled
+}
+
+entity TargetCondition {
+  id:           string /TC-\d+/
+  description:  string
+  proof_method: string
+  status:       string
+}
+
+relation Task -> Adventure {
+  type:        belongs_to
+  via:         adventure_id
+  cardinality: 0..1
+}
+
+relation Task -> Task {
+  type:        depends_on
+  via:         depends_on
+  cardinality: 0..*
+}
+
+relation Adventure -> Task {
+  type:        owns
+  via:         tasks[]
+  cardinality: 1..*
+  lifecycle:   cascade_delete
+}
+
+relation Task -> TargetCondition {
+  type:        owns
+  via:         target_conditions[]
+  cardinality: 0..*
+}

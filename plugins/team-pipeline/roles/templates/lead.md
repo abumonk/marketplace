@@ -37,10 +37,12 @@ An agent just completed work on a task. You must:
 
 ### Automatic: SessionStart
 A new session started. You must:
-1. Read `.agent/lead-state.md`
-2. Check for stale `active_agents` (agents from previous session)
-3. Check for accumulated `pending_proposals`
-4. Summarize pipeline state and present pending decisions
+1. **Read `.agent/roadmap.md`** (if it exists)
+2. **Present roadmap briefing** (see Roadmap Maintenance > Session Orientation)
+3. Read `.agent/lead-state.md`
+4. Check for stale `active_agents` (agents from previous session)
+5. Check for accumulated `pending_proposals`
+6. Summarize pipeline state with roadmap context
 
 ### Automatic: Stop
 Session is ending. You must:
@@ -275,6 +277,104 @@ After a task reaches completed status:
 2. Execute `check` actions (e.g., adventure completion verification)
 3. Execute `notify` actions (send completion notifications)
 4. Execute `log` actions (record final metrics)
+5. If a `roadmap-task-completed` hook matched, execute Roadmap Maintenance > On TaskCompleted duties
+
+## Roadmap Maintenance
+
+The lead agent keeps `.agent/roadmap.md` current as pipeline events occur. All updates follow read-modify-write on a single file. Since the lead is the only writer, no locking is needed.
+
+### On TaskCompleted
+
+After standard task completion handling:
+1. Read `.agent/roadmap.md` (skip if file does not exist)
+2. Identify the project(s) associated with the completed task (from task `files` field paths)
+3. Update the project's frontmatter: decrement `open_tasks`, increment `completed_tasks` in ecosystem_stats
+4. Update the project's Active Work section if the task was part of an adventure
+5. Write the updated roadmap
+
+### On Adventure State Change
+
+When an adventure transitions state:
+- **active -> completed**: Increment project `completed_adventures`, clear `current_adventure` if it matches, update Recent Completions section, recalculate `health`
+- **planning -> active**: Set project `current_adventure` to the new adventure ID, update Active Work section
+- **any -> blocked**: Recalculate project `health` (may become yellow or red)
+
+### On SessionStart
+
+Before any other state reads (before reading lead-state.md):
+1. Read `.agent/roadmap.md` (if it does not exist, skip to standard SessionStart and append tip: "Run `/roadmap-init` to set up the project roadmap.")
+2. Update `last_session_read` timestamp in frontmatter
+3. Present the roadmap briefing (see Session Orientation below)
+4. Continue with standard SessionStart flow (read lead-state, check stale agents, etc.)
+
+### On SessionStop (Stop trigger)
+
+After standard Stop duties:
+1. Read `.agent/roadmap.md` (skip if file does not exist)
+2. Append a session notes entry to the `## Session Notes` section with:
+   - ISO date + HH:MM timestamp
+   - Bulleted list of key decisions and outcomes from this session
+3. Trim entries if more than 5 exist (remove oldest)
+4. Write the updated roadmap
+
+### Health Derivation Logic
+
+Recalculate a project's `health` field whenever adventures change state:
+
+```
+if any adventure state == blocked AND adventure is on the critical path:
+  health = red
+elif any task stuck > 24h without progress OR any adventure blocked (non-critical):
+  health = yellow
+else:
+  health = green
+```
+
+"Critical path" means the adventure is a dependency for other active or planned adventures (check the Dependency Map section). "Stuck > 24h" means a task's `updated` timestamp is older than 24 hours while its status is `in_progress`.
+
+### Session Orientation Briefing
+
+When presenting the roadmap at SessionStart, use this format:
+
+```
+## Session Orientation
+
+**Ecosystem**: {total_adventures} adventures, {total_tasks} tasks, {passed_tcs}/{total_tcs} TCs
+
+### Project Status
+| Project | Health | Current | Open Tasks |
+|---------|--------|---------|------------|
+| {project_id} | {health} | {current_adventure or "idle"} | {open_tasks} |
+
+### Since Last Session
+- {session notes from previous session entry}
+- {any adventures that completed since last_session_read}
+- {any new blocked items since last_session_read}
+
+### Recommended Next Actions
+1. {highest priority action}
+2. {second priority action}
+
+Roadmap last updated: {last_updated}. Use `/roadmap` for full details.
+```
+
+### Recommended Actions Logic
+
+Generate recommended actions by evaluating (in priority order):
+1. Active adventures with failing or blocked TCs -> "Investigate TC-XXX failure in ADV-YYY"
+2. Completed adventures not yet researched -> "Research ADV-YYY outcomes"
+3. Planned adventures whose prerequisites are met -> "Start ADV-YYY (prerequisites satisfied)"
+4. Projects with yellow/red health -> "Address {project} health: {reason}"
+5. Stale tasks (>24h without progress) -> "Check TASK-XXX progress"
+
+If nothing is actionable: "All clear. Consider reviewing strategic goals or adding milestones."
+
+### Graceful Degradation
+
+If `.agent/roadmap.md` does not exist:
+- Skip the roadmap briefing silently
+- Continue with the standard SessionStart flow
+- Append a note: "Tip: Run `/roadmap-init` to set up the project roadmap."
 
 ## Agent Memory Injection
 
@@ -351,6 +451,62 @@ If no rules match, omit the section entirely.
 - ALWAYS check `.agent/rules/` before spawning agents (skip silently if directory does not exist)
 - ALWAYS inject matching rules into the agent's spawn prompt
 - NEVER modify rule files -- they are user-maintained
+
+## Step2Step Management
+
+When a SubagentStop event involves a step2step agent (identified by step2step manifest paths in the agent's prompt context):
+
+### step-generator completes
+
+1. Read the instance manifest at `.agent/step2step/{S2S-ID}/manifest.md`
+2. If `stage: steps_generated`:
+   - Count step files in `.agent/step2step/{S2S-ID}/steps/`
+   - Present to user: "Step generator completed for {S2S-ID}. {N} steps generated."
+   - Propose: "Run `/step2step analyze {S2S-ID}` to begin analysis."
+3. If `stage` is still `theme_defined` (crash or timeout):
+   - Present to user: "Step generator failed for {S2S-ID} — no steps were written."
+   - Propose: "Retry with `/step2step start {theme}` or inspect `.agent/step2step/{S2S-ID}/steps/` manually."
+
+### step-analyzer completes
+
+1. Read all step files in `.agent/step2step/{S2S-ID}/steps/`
+2. Count steps with `status: analyzed` vs total steps
+3. If all steps analyzed:
+   - Present to user: "All {N} steps analyzed for {S2S-ID}."
+   - Propose: "Run `/step2step cascade {S2S-ID}` to check for cascade impacts."
+4. If some steps remain unanalyzed:
+   - Present to user: "{analyzed}/{total} steps analyzed for {S2S-ID}."
+   - Propose: "Run `/step2step analyze {S2S-ID}` to continue analysis."
+
+### cascade-tracker completes
+
+1. Read cascade files in `.agent/step2step/{S2S-ID}/cascades/`
+2. If cascades were found (cascade files exist):
+   - Present to user: "Cascade analysis complete for {S2S-ID}. {N} cascades identified."
+   - Propose: "Review cascades, then run `/step2step prove {S2S-ID}` when ready."
+3. If no cascades found:
+   - Present to user: "No cascades found for {S2S-ID}. All steps are independent."
+   - Propose: "Run `/step2step prove {S2S-ID}` to begin proof review."
+
+### proof-reviewer completes
+
+1. Read the manifest `proof_status` field
+2. If `proof_status: passed`:
+   - Present to user: "Proof review PASSED for {S2S-ID}. The step sequence is validated."
+   - Propose: "Create an adventure from this step sequence? Run `/step2step prove {S2S-ID}` to confirm adventure creation."
+3. If `proof_status: failed`:
+   - Read the proof review file in `.agent/step2step/{S2S-ID}/proof/` for rework details
+   - Present to user: "Proof review FAILED for {S2S-ID}. Rework required."
+   - Include the key issues from the proof review file
+   - Propose: "Address the rework items, then re-run `/step2step prove {S2S-ID}`."
+
+### Identifying Step2Step Agents
+
+Distinguish step2step agents from regular pipeline agents by checking:
+- The agent's role name matches: `step-generator`, `step-analyzer`, `cascade-tracker`, `proof-reviewer`
+- Or the agent's prompt context references a path matching `.agent/step2step/S2S-*/manifest.md`
+
+Step2step agents do NOT go through the standard pipeline stage transitions. Handle them exclusively under this section.
 
 ## Adventure Management
 

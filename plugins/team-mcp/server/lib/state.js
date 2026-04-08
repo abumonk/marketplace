@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, mkdir, rename } from 'fs/promises';
+import { readFile, writeFile, appendFile, readdir, mkdir, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -118,6 +118,41 @@ export function logEntry(message) {
   const now = new Date();
   const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return `- [${ts}] ${message}`;
+}
+
+/**
+ * Format a single adventure log line.
+ * Format: [{ISO timestamp}] {agent} | "{message}"
+ *
+ * @param {string} agent - Agent identifier (e.g., 'lead', 'adventure-planner')
+ * @param {string} message - Log message
+ * @returns {string} Formatted log line with newline
+ */
+export function adventureLogLine(agent, message) {
+  return `[${new Date().toISOString()}] ${agent} | "${message}"\n`;
+}
+
+/**
+ * Append a line to an adventure's adventure.log file (append-only, never read).
+ *
+ * @param {string} adventureDir - Path to the adventure directory (e.g., .agent/adventures/ADV-015)
+ * @param {string} agent - Agent identifier
+ * @param {string} message - Log message
+ */
+export async function appendAdventureLog(adventureDir, agent, message) {
+  const logPath = join(adventureDir, 'adventure.log');
+  await appendFile(logPath, adventureLogLine(agent, message), 'utf-8');
+}
+
+/**
+ * Append a metrics row to an adventure's metrics.md file.
+ *
+ * @param {string} adventureDir - Path to the adventure directory
+ * @param {string} row - Pipe-delimited table row (without leading/trailing newline)
+ */
+export async function appendAdventureMetrics(adventureDir, row) {
+  const metricsPath = join(adventureDir, 'metrics.md');
+  await appendFile(metricsPath, row + '\n', 'utf-8');
 }
 
 /**

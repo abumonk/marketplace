@@ -2,6 +2,50 @@
 
 Stage-based task processing pipeline with planner, implementer, reviewer, and researcher agents.
 
+## Structure
+
+```
+team-pipeline/
+├── agents/                 # Agent definitions (11+ agents)
+│   ├── adventure-planner.md
+│   ├── adventure-preparer.md
+│   ├── implementer.md
+│   ├── planner.md
+│   ├── researcher.md
+│   └── reviewer.md
+├── skills/                 # Slash command skills (12 skills)
+│   ├── adventure-status/
+│   ├── start-adventure/
+│   ├── status/
+│   ├── task-create/
+│   ├── task-status/
+│   ├── task-init/
+│   ├── task-migrate/
+│   ├── team-update/
+│   └── ...
+├── commands/               # CLI commands
+├── hooks/                  # Hook configurations
+├── roles/                  # Role templates for target projects
+├── templates/              # Task and adventure templates
+├── schema/                 # Agent schema definitions
+├── dsl/                    # Visual schema language for pipeline definitions
+├── docs/                   # Documentation
+└── README.md
+```
+
+## Pipeline Stages
+
+```
+planning → implementing → reviewing → fixing → completed → researching
+```
+
+## Key Files
+
+- `agents/*.md` — Agent prompts (planner=opus, implementer=sonnet, reviewer=sonnet, researcher=opus)
+- `skills/*/skill.md` — Skill definitions invoked by slash commands
+- `roles/*.md` — Role templates copied to target projects via `/task-init`
+- `schema/agent-schema.md` — Schema for agent definitions
+
 ## Working Directory
 
 Always verify the current working directory is a project root (not system directories like C:\WINDOWS\system32) before performing any file or pipeline operations. If not in a project directory, alert the user immediately.

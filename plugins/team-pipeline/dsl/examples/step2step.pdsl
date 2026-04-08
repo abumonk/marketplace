@@ -1,0 +1,373 @@
+// step2step.pdsl
+// PDSL model for the Step-to-Step (S2S) pipeline.
+// Models the complete lifecycle of converting a theme into a structured adventure
+// plan through six stages: theme_defined, steps_generated, step_analysis,
+// cascade_check, proof_review, and adventure_created.
+//
+// Constructs used: entity, lifecycle, structure, relation
+
+// ---------------------------------------------------------------------------
+// Stub entity declarations (forward references for containment/spawn blocks)
+// ---------------------------------------------------------------------------
+
+entity StepAnalysis {}
+entity Alternative {}
+entity CascadeImpact {}
+entity ProofIssue {}
+entity S2SManifest {}
+entity S2SLog {}
+entity Adventure {}
+
+// ---------------------------------------------------------------------------
+// Enum-only entities
+// ---------------------------------------------------------------------------
+
+entity S2SStage {
+  values: theme_defined | steps_generated | step_analysis | cascade_check | proof_review | adventure_created
+}
+
+entity StepStatus {
+  values: pending | analyzed | modified | replaced | cascade_pending | resolved
+}
+
+entity Recommendation {
+  values: keep | modify | replace | split | merge
+}
+
+entity UserDecision {
+  values: accepted | rejected | deferred | modified
+}
+
+entity Severity {
+  values: low | medium | high | critical
+}
+
+entity ChangeType {
+  values: scope_change | dependency_add | dependency_remove | content_change | merge | split
+}
+
+entity Effort {
+  values: trivial | small | medium | large | xlarge
+}
+
+// ---------------------------------------------------------------------------
+// Full entity declarations
+// ---------------------------------------------------------------------------
+
+entity Step2StepInstance {
+  instance_id:    string /S2S-\d{3}/
+  theme:          string
+  current_stage:  S2SStage
+  steps:          Step[0..*]
+  cascades:       Cascade[0..*]
+  adventure_ref:  Adventure?
+  created:        string
+  updated:        string
+}
+
+entity Step {
+  step_id:        string /S2S-\d{3}-ST\d{2}/
+  title:          string
+  description:    string
+  current_status: StepStatus
+  depends_on:     Step[0..*]
+  analysis:       StepAnalysis?
+  alternatives:   Alternative[0..*]
+  recommendation: Recommendation?
+  decision:       UserDecision?
+}
+
+entity Cascade {
+  cascade_id:    string /S2S-\d{3}-CA\d{2}/
+  source_step:   Step
+  source_change: ChangeType
+  affected:      Step[1..*]
+  impact:        CascadeImpact?
+  current_status: StepStatus
+}
+
+entity ProofReview {
+  proof_id:         string /S2S-\d{3}-PR\d{2}/
+  instance_ref:     Step2StepInstance
+  review_status:    Recommendation
+  steps_reviewed:   Step[0..*]
+  cascades_reviewed: Cascade[0..*]
+  issues:           ProofIssue[0..*]
+  adventure_ref:    Adventure?
+  created:          string
+}
+
+// ---------------------------------------------------------------------------
+// Structure declaration
+// ---------------------------------------------------------------------------
+
+structure Step2StepInstance {
+  id: S2S-{NNN}
+  state: new | theme_defined | steps_generated | step_analysis | cascade_check | proof_review | adventure_created
+
+  contains {
+    manifest.md    -> S2SManifest[1]
+    adventure.log  -> S2SLog[1]
+    steps/         -> Step[0..*]
+    cascades/      -> Cascade[0..*]
+    proof/         -> ProofReview[0..1]
+  }
+
+  spawns {
+    Step[1..*] from manifest
+    Cascade[0..*] from steps
+  }
+
+  delegates {
+    theme_defined     -> lead
+    steps_generated   -> planner
+    step_analysis     -> reviewer
+    cascade_check     -> planner
+    proof_review      -> reviewer
+    adventure_created -> lead
+  }
+
+  checkpoints {
+    new              -> theme_defined:      "user provides theme and scope"
+    theme_defined    -> steps_generated:    "lead generates initial step list"
+    steps_generated  -> step_analysis:      "planner completes step breakdown"
+    step_analysis    -> cascade_check:      "reviewer completes all step analyses"
+    cascade_check    -> proof_review:       "planner resolves all cascades"
+    proof_review     -> adventure_created:  "reviewer approves all steps and cascades"
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle declarations
+// ---------------------------------------------------------------------------
+
+lifecycle ThemeDefinedCycle {
+  role: lead
+  model: opus
+  trigger: instance.current_stage == "new"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/config.md
+    read .agent/knowledge/notes.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{instance_ref}/steps/
+    update instance.current_stage -> "theme_defined"
+  }
+
+  transitions {
+    on success -> steps_generated
+    on blocked_on_question -> wait
+    on error -> wait
+  }
+
+  completion {
+    emit instance.theme_defined
+    log "{timestamp} lead: theme defined, initial context captured"
+  }
+}
+
+lifecycle StepsGeneratedCycle {
+  role: planner
+  model: opus
+  trigger: instance.current_stage == "theme_defined"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/adventures/{instance_ref}/steps/
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{instance_ref}/steps/
+    update instance.current_stage -> "steps_generated"
+  }
+
+  transitions {
+    on success -> step_analysis
+    on blocked_on_question -> wait
+    on error -> wait
+  }
+
+  completion {
+    emit instance.steps_generated
+    log "{timestamp} planner: step list generated"
+  }
+}
+
+lifecycle StepAnalysisCycle {
+  role: reviewer
+  model: sonnet
+  trigger: instance.current_stage == "steps_generated"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/adventures/{instance_ref}/steps/
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    update instance.current_stage -> "step_analysis"
+  }
+
+  transitions {
+    on success -> cascade_check
+    on needs_revision -> steps_generated
+    on error -> wait
+  }
+
+  completion {
+    emit instance.step_analysis_done
+    log "{timestamp} reviewer: step analysis complete"
+  }
+}
+
+lifecycle CascadeCheckCycle {
+  role: planner
+  model: opus
+  trigger: instance.current_stage == "step_analysis"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/adventures/{instance_ref}/steps/
+    read .agent/adventures/{instance_ref}/cascades/
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{instance_ref}/cascades/
+    update instance.current_stage -> "cascade_check"
+  }
+
+  transitions {
+    on success -> proof_review
+    on needs_revision -> step_analysis
+    on error -> wait
+  }
+
+  completion {
+    emit instance.cascade_check_done
+    log "{timestamp} planner: cascade check complete"
+  }
+}
+
+lifecycle ProofReviewCycle {
+  role: reviewer
+  model: opus
+  trigger: instance.current_stage == "cascade_check"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/adventures/{instance_ref}/steps/
+    read .agent/adventures/{instance_ref}/cascades/
+    read .agent/adventures/{instance_ref}/proof/
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{instance_ref}/proof/
+    update instance.current_stage -> "proof_review"
+  }
+
+  transitions {
+    on passed -> adventure_created
+    on failed -> cascade_check
+    on error -> wait
+  }
+
+  completion {
+    emit instance.proof_review_done
+    log "{timestamp} reviewer: proof review complete"
+  }
+}
+
+lifecycle AdventureCreatedCycle {
+  role: lead
+  model: opus
+  trigger: instance.current_stage == "proof_review"
+
+  input {
+    read .agent/adventures/{instance_ref}/manifest.md
+    read .agent/adventures/{instance_ref}/steps/
+    read .agent/adventures/{instance_ref}/cascades/
+    read .agent/adventures/{instance_ref}/proof/
+    read .agent/config.md
+  }
+
+  execute {
+    explore codebase
+    write .agent/adventures/{instance_ref}/manifest.md
+    update instance.current_stage -> "adventure_created"
+  }
+
+  transitions {
+    on success -> completed
+    on error -> wait
+  }
+
+  completion {
+    emit instance.adventure_created
+    log "{timestamp} lead: adventure plan created from step2step pipeline"
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Relation declarations
+// ---------------------------------------------------------------------------
+
+relation Step2StepInstance -> Step {
+  type:        owns
+  via:         steps[]
+  cardinality: 1..*
+  lifecycle:   cascade_delete
+}
+
+relation Step2StepInstance -> Cascade {
+  type:        owns
+  via:         cascades[]
+  cardinality: 0..*
+  lifecycle:   cascade_delete
+}
+
+relation Step2StepInstance -> Adventure {
+  type:        references
+  via:         adventure_ref
+  cardinality: 0..1
+}
+
+relation Step -> Step {
+  type:        depends_on
+  via:         depends_on[]
+  cardinality: 0..*
+}
+
+relation Step -> Step {
+  type:        cascades_to
+  via:         affected[]
+  cardinality: 0..*
+}
+
+relation Cascade -> Step {
+  type:        references
+  via:         source_step
+  cardinality: 1
+}
+
+relation Cascade -> Step {
+  type:        references
+  via:         affected[]
+  cardinality: 1..*
+}
+
+relation ProofReview -> Step2StepInstance {
+  type:        belongs_to
+  via:         instance_ref
+  cardinality: 1
+}

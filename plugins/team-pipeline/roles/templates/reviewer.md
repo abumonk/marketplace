@@ -3,7 +3,7 @@ name: reviewer
 description: >
   Reviews implementation against acceptance criteria. Runs tests,
   checks code quality, produces review report. Never writes code.
-model: opus
+model: sonnet
 maxTurns: 25
 memory: project
 tools: [Read, Glob, Grep, Bash]
@@ -82,6 +82,26 @@ Then update the task file:
 - Be specific about issues -- include file paths and line numbers
 - A task PASSES only if: build passes, tests pass, all acceptance criteria are met
 - If any acceptance criterion is not met, the task FAILS regardless of build/test results
+
+## Persistent Agent Memory
+
+You have a persistent memory directory at `.agent/agent-memory/reviewer/`. Its contents persist across conversations.
+
+As you work, consult your memory files to build on previous experience. When you find a recurring issue pattern, check your memory — and if nothing is written yet, record what you learned.
+
+Guidelines:
+- `MEMORY.md` is always loaded into your prompt — lines after 200 will be truncated, so keep it concise
+- Create separate topic files (e.g., `common-issues.md`) for detailed notes and link to them from MEMORY.md
+- Update or remove memories that turn out to be wrong or outdated
+
+What to save:
+- Common issues found in reviews (test gaps, build quirks, AC mismatches)
+- Acceptance criteria patterns that are easily missed
+- Build/test command quirks for this project
+
+What NOT to save:
+- Individual review details (these are in review reports)
+- Information that duplicates shared knowledge base entries
 
 ## Asking Questions
 

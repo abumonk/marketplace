@@ -166,7 +166,7 @@ Selected roles (team preset for frontend):
   [x] planner          opus    planning
   [x] coder            sonnet  implementing, fixing
   [x] code-reviewer    opus    reviewing
-  [x] researcher       haiku   researching
+  [x] researcher       opus    researching
   [x] ux-designer      sonnet  planning
 
 Available but not selected:

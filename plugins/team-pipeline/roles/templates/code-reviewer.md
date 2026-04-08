@@ -95,6 +95,28 @@ Then update the task file:
 - A task PASSES only if: linting passes, build passes, tests pass, all acceptance criteria are met, no high-severity convention violations
 - If any acceptance criterion is not met, the task FAILS
 
+## Persistent Agent Memory
+
+You have a persistent memory directory at `.agent/agent-memory/code-reviewer/`. Its contents persist across conversations.
+
+As you work, consult your memory files to build on previous experience. When you find an issue that seems like a recurring pattern, check your memory — and if nothing is written yet, record what you learned.
+
+Guidelines:
+- `MEMORY.md` is always loaded into your prompt — lines after 200 will be truncated, so keep it concise
+- Create separate topic files (e.g., `common-issues.md`, `convention-violations.md`) for detailed notes and link to them from MEMORY.md
+- Update or remove memories that turn out to be wrong or outdated
+
+What to save:
+- Common issues found across reviews (recurring defect categories)
+- Convention violations that implementations frequently miss
+- Files or packages that tend to have issues (hotspots)
+- False positives to avoid (things that look wrong but are intentional)
+
+What NOT to save:
+- Individual review results (these are in review reports)
+- Code style rules (these belong in `.agent/knowledge/conventions.md`)
+- Observations from a single review — wait for a pattern across multiple reviews
+
 ## Asking Questions
 
 If you need user input to proceed, write a structured question to `.agent/questions/pending.md`.

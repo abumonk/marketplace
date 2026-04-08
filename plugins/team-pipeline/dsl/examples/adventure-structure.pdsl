@@ -1,0 +1,83 @@
+// adventure-structure.pdsl
+// Structure declarations for the two main hierarchical artifact types
+// in the team-pipeline domain: Adventure and Task.
+// Stub entity declarations are included to satisfy containment and spawn
+// type references within this file.
+
+entity Design {}
+entity Plan {}
+entity Schema {}
+entity Manifest {}
+entity Report {}
+entity Task {}
+entity Log {}
+entity Metrics {}
+entity Permissions {}
+entity Role {}
+entity TestStrategy {}
+
+structure Adventure {
+  id: ADV-{NNN}
+  state: concept | planning | review | active | paused | blocked | completed | cancelled
+
+  contains {
+    manifest.md      -> Manifest[1]
+    adventure.log    -> Log[1]
+    metrics.md       -> Metrics[1]
+    permissions.md   -> Permissions[0..1]
+    report-en.md     -> Report[0..1]
+    report-ru.md     -> Report[0..1]
+    designs/         -> Design[0..*]
+    plans/           -> Plan[0..*]
+    schemas/         -> Schema[0..*]
+    tasks/           -> Task[0..*]
+    tasks/archive/   -> Task[0..*]
+    roles/           -> Role[0..*]
+    tests/           -> TestStrategy[0..1]
+  }
+
+  spawns {
+    Task[1..*] from plans
+  }
+
+  delegates {
+    planning   -> adventure-planner
+    preparing  -> adventure-preparer
+    reporting  -> adventure-reporter
+  }
+
+  checkpoints {
+    concept  -> planning:  "user approves concept"
+    review   -> active:    "user approves plan, tasks, and permissions"
+    review   -> planning:  "user requests rework"
+    active   -> completed: "all tasks done, all TCs passed"
+    active   -> blocked:   "all tasks done, some TCs failed"
+    blocked  -> active:    "user unblocks after fixing"
+    paused   -> active:    "user resumes adventure"
+  }
+}
+
+structure Task {
+  id: ADV{NNN}-T{NNN}
+  state: planning | implementing | reviewing | fixing | completed | researching
+
+  contains {
+    designs/ -> Design[0..1]
+    reports/ -> Report[0..1]
+  }
+
+  delegates {
+    planning     -> planner
+    implementing -> implementer
+    reviewing    -> reviewer
+    fixing       -> implementer
+    researching  -> researcher
+  }
+
+  checkpoints {
+    implementing -> reviewing:  "implementer sets status ready"
+    reviewing    -> fixing:     "reviewer finds issues"
+    fixing       -> reviewing:  "fixer sets status ready"
+    reviewing    -> completed:  "reviewer finds no issues"
+  }
+}

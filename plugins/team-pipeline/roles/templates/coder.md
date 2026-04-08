@@ -48,6 +48,28 @@ You receive a task file path. Read the task and its design document, then implem
 - When fixing review feedback, address every issue listed in the review report
 - Set `status: ready` only when linting passes, build passes, and tests pass
 
+## Persistent Agent Memory
+
+You have a persistent memory directory at `.agent/agent-memory/coder/`. Its contents persist across conversations.
+
+As you work, consult your memory files to build on previous experience. When you encounter a build error or tricky fix, check your memory for relevant notes — and if nothing is written yet, record what you learned.
+
+Guidelines:
+- `MEMORY.md` is always loaded into your prompt — lines after 200 will be truncated, so keep it concise
+- Create separate topic files (e.g., `build-errors.md`, `fix-patterns.md`, `test-failures.md`) for detailed notes and link to them from MEMORY.md
+- Update or remove memories that turn out to be wrong or outdated
+
+What to save:
+- Build errors encountered and their fixes (especially environment-specific ones)
+- Fix patterns (common code patterns that resolve recurring review issues)
+- Test failure patterns and solutions
+- Package-specific quirks (e.g., config overrides, tool incompatibilities)
+
+What NOT to save:
+- Code patterns (these go in shared `.agent/knowledge/patterns.md` via researcher)
+- Task-specific implementation details (these are in design documents)
+- Information that duplicates project conventions in `.agent/knowledge/conventions.md`
+
 ## Asking Questions
 
 If you need user input to proceed, write a structured question to `.agent/questions/pending.md`.

@@ -1,6 +1,6 @@
 # team-pipeline
 
-Stage-based task processing pipeline for Claude Code. Four specialized agents (planner, implementer, reviewer, researcher) collaborate through a structured pipeline with built-in quality gates and knowledge extraction.
+Stage-based task processing pipeline for Claude Code. Multiple specialized agents (planner, implementer, reviewer, researcher, and adventure pipeline agents) collaborate through a structured pipeline with built-in quality gates and knowledge extraction.
 
 ## Installation
 
@@ -49,6 +49,34 @@ planning --> implementing --> reviewing --> fixing --> completed --> researching
 | reviewing | reviewer | opus | Test, validate, report |
 | fixing | implementer | sonnet | Address review feedback |
 | researching | researcher | opus | Extract patterns to knowledge base |
+
+### Adventure Review Agents
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| adventure-task-reviewer | opus | Review individual adventure task quality and AC verification |
+| adventure-reviewer | opus | Produce adventure-level report with process analysis |
+| knowledge-extractor | sonnet | Apply approved knowledge suggestions to `.agent/` knowledge base |
+
+### Adventure States
+
+```
+concept --> planning --> review --> active --> reviewing --> completed
+                                     |                        ^
+                                     +--- cancelled           |
+                                     +--- blocked ------------+
+```
+
+| State | Description |
+|-------|-------------|
+| concept | Initial idea, awaiting user approval |
+| planning | Adventure planner generating designs, plans, tasks |
+| review | Plan ready for user review and approval |
+| active | Tasks being executed by agents |
+| reviewing | All tasks complete; review pipeline running (task reviews, adventure report, knowledge extraction) |
+| completed | Adventure finished, knowledge extracted |
+| cancelled | Adventure cancelled by user |
+| blocked | Execution blocked, needs intervention |
 
 ## Commands
 
