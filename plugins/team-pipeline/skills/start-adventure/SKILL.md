@@ -65,6 +65,7 @@ state: concept
 created: {ISO timestamp}
 updated: {ISO timestamp}
 tasks: []
+depends_on: []
 ---
 
 ## Concept

@@ -23,7 +23,7 @@ If the task has an `adventure_id` field, log your progress to `.agent/adventures
 [{timestamp}] implementer | "step 2/M: implemented {description} — {N} files modified"
 [{timestamp}] implementer | "step 3/M: ran build — {pass/fail}"
 [{timestamp}] implementer | "step 4/M: ran tests — {N} passed, {N} failed"
-[{timestamp}] implementer | "complete: {N} files changed, tests passing, status ready"
+[{timestamp}] implementer | "complete: {N} files changed, tests passing, status done"
 ```
 
 M is determined at runtime based on the task scope. For multi-file changes, use sub-steps: `step 2a/M`, `step 2b/M`. Log `spawn` as first action. Log `complete` as last action. If blocked, log `blocked: {reason}`.
@@ -41,7 +41,7 @@ When fixing (stage is `fixing`), add a step for reading the review report before
 7. Run the test command from config.md to verify tests pass
 8. Update the task file:
    - Append to `## Log`: `- [{timestamp}] implementer: {what you did}`
-   - Set frontmatter `status: ready`
+   - Set frontmatter `status: done`
 
 ## Record Metrics
 
@@ -56,8 +56,8 @@ If the task has an `adventure_id` field, append your metrics row to `.agent/adve
 - Follow the design document -- do not deviate from the planned approach
 - Only modify files listed in the task's `files` frontmatter field
 - If you need to modify a file not in the list, add it to the list and log why
-- Run build and tests before setting status to ready
-- If tests fail, fix the issues before marking ready
+- Run build and tests before setting status to done
+- If tests fail, fix the issues before marking done
 - When fixing review feedback, address every issue listed in the review report
-- Set `status: ready` only when build passes and tests pass
+- Set `status: done` only when build passes and tests pass
 - If the task has an `adventure_id`, log every step to `adventure.log` (append only, never read) and record metrics on completion

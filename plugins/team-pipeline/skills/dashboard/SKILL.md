@@ -16,7 +16,7 @@ Use this table in Step 7 to classify each adventure by its title. Check in order
 |---------|------|----------|------|-------------|
 | Pipeline DSL | pipeline-dsl | "Pipeline DSL", "DSL" | projects/team-pipeline/dsl/ | Visual schema language for pipeline definitions |
 | Team MCP | team-mcp | "MCP Server", "MCP Tools", "MCP" | projects/team-mcp/ | MCP server for pipeline state access |
-| Team Pipeline | team-pipeline | "Pipeline" (not "DSL"), "Agent", "Step2Step", "SRS", "Automation", "Review Pipeline" | projects/team-pipeline/ | Task processing pipeline plugin (6-stage, multi-agent) |
+| Team Pipeline | team-pipeline | "Pipeline" (not "DSL"), "Agent", "Step2Step", "SRS", "Automation", "Review Pipeline", "Roadmap", "Dashboard", "Command Center" | projects/team-pipeline/ | Task processing pipeline plugin (6-stage, multi-agent) |
 | Binartlab | binartlab | "Binartlab", "Platform", "Mobile", "Backend", "Vertical Slice", "Control UI", "UX Design" | projects/binartlab/ | Agent orchestration platform (8 npm workspace packages) |
 | Marketplace | marketplace | "Marketplace" | marketplace/ | Local plugin marketplace (claudovka-marketplace) |
 
@@ -134,7 +134,7 @@ For each adventure:
 2. Check keywords in this strict order:
    - **Pipeline DSL** (slug: `pipeline-dsl`): title contains "pipeline dsl" OR "dsl"
    - **Team MCP** (slug: `team-mcp`): title contains "mcp server" OR "mcp tools" OR "mcp"
-   - **Team Pipeline** (slug: `team-pipeline`): title contains "pipeline" OR "agent" OR "step2step" OR "srs" OR "automation" OR "review pipeline"
+   - **Team Pipeline** (slug: `team-pipeline`): title contains "pipeline" OR "agent" OR "step2step" OR "srs" OR "automation" OR "review pipeline" OR "roadmap" OR "dashboard" OR "command center"
    - **Binartlab** (slug: `binartlab`): title contains "binartlab" OR "platform" OR "mobile" OR "backend" OR "vertical slice" OR "control ui" OR "ux design"
    - **Marketplace** (slug: `marketplace`): title contains "marketplace"
 3. First keyword match assigns `adventure.projectSlug = slug`

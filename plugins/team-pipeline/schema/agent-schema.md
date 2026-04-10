@@ -418,3 +418,21 @@ Read by the reinit skill to create or upgrade project pipelines.
 
 Fields in the `interactive` array trigger user prompts during first-time setup only.
 During upgrades, missing fields receive their defaults silently.
+
+## Adventure Manifest Schema
+
+Adventure manifests (`.agent/adventures/{ADV-ID}/manifest.md`) use the following frontmatter fields:
+
+```yaml
+id: ADV-001                  # Adventure identifier
+title: string                # Human-readable title
+state: concept               # concept | planning | active | paused | blocked | reviewing | completed | cancelled
+created: ISO timestamp
+updated: ISO timestamp
+tasks: []                    # List of task IDs belonging to this adventure
+depends_on: []               # Optional. List of ADV-IDs this adventure depends on.
+                             # Used for automated dependency graph construction.
+                             # Example: [ADV-017, ADV-019]
+```
+
+The `depends_on` field is optional. Omit or leave empty `[]` when the adventure has no dependencies. Populate it during planning when the adventure builds on artifacts from prior adventures.

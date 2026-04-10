@@ -33,9 +33,9 @@ description: Display the current status of all tasks in the pipeline, grouped by
 
 5. Flag any tasks with `iterations >= 3` as BLOCKED.
 
-6. If a task has `status: ready` or `status: passed` or `status: failed`, suggest the next action:
+6. If a task has `status: ready` or `status: done` or `status: passed` or `status: failed`, suggest the next action:
    - `ready` in `planning` stage: "Ready to advance to implementing"
-   - `ready` in `implementing` stage: "Ready to advance to reviewing"
+   - `done` in `implementing` stage: "Ready to advance to reviewing"
    - `passed` in `reviewing` stage: "Ready to complete"
    - `failed` in `reviewing` stage: "Ready to advance to fixing (iteration {n+1})"
 
